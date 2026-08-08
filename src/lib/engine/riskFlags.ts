@@ -1,6 +1,9 @@
 // Risk flag engine. Flags are derived strictly from retrieved evidence - GREEN never
 // means "verified clean", only "no adverse evidence found in the sources checked".
-import { NormalizedRecord, RiskFlag, TimelineEntry } from "../types";
+//
+// v0.1.2 hard rule: GREEN is only emitted when evidenceCoverage.greenEligible is true
+// (all required automatic sources SUCCESS) AND no RED adverse findings exist.
+import { EvidenceCoverage, NormalizedRecord, RiskFlag, RiskFlagLevel, TimelineEntry } from "../types";
 
 const ADVERSE_KEYWORDS: Record<string, RegExp> = {
   salvage: /\bsalvage\b/i,
@@ -22,7 +25,19 @@ function pushFlag(
   flags.push({ id, level, title, detail, supportingRecordIndexes });
 }
 
-export function computeRiskFlags(records: NormalizedRecord[], timeline: TimelineEntry[]): RiskFlag[] {
+export function worstRiskLevel(flags: RiskFlag[]): RiskFlagLevel {
+  if (flags.some((f) => f.level === "RED")) return "RED";
+  if (flags.some((f) => f.level === "AMBER")) return "AMBER";
+  if (flags.some((f) => f.level === "GREEN")) return "GREEN";
+  // No flags at all — treat as AMBER (never imply clean from silence).
+  return "AMBER";
+}
+
+export function computeRiskFlags(
+  records: NormalizedRecord[],
+  timeline: TimelineEntry[],
+  coverage: EvidenceCoverage
+): RiskFlag[] {
   const flags: RiskFlag[] = [];
 
   // Adverse keyword scan across raw excerpts, title_status, and damage fields.
@@ -90,25 +105,40 @@ export function computeRiskFlags(records: NormalizedRecord[], timeline: Timeline
     }
   }
 
-  // If no adverse evidence and no records at all beyond decode, flag AMBER incompleteness.
-  const nonDecodeRecords = records.filter((r) => !r.event_type.startsWith("vin_decode") && r.event_type !== "search_leads_generated");
-  if (nonDecodeRecords.length === 0) {
+  // Coverage incompleteness is always surfaced when GREEN is not eligible.
+  if (!coverage.greenEligible) {
     pushFlag(
       flags,
-      "incomplete-evidence",
+      "incomplete-search",
       "AMBER",
-      "Incomplete evidence base",
-      "Only factory decode data was retrieved automatically. Public history sources require manual review via the generated search leads, and NICB/NMVTIS/CARFAX results (if any) have not been imported."
+      "Search incomplete — no conclusion about adverse history",
+      coverage.summary
     );
   }
 
-  if (flags.filter((f) => f.level === "RED").length === 0) {
+  // Zero retrieved FACT records must never imply clean history.
+  const factRecords = records.filter((r) => r.evidence_type === "FACT");
+  if (factRecords.length === 0) {
+    pushFlag(
+      flags,
+      "zero-fact-records",
+      "AMBER",
+      "No factual evidence records retrieved",
+      "Zero FACT records were retrieved. Absence of records must never be treated as a clean history."
+    );
+  }
+
+  const hasRed = flags.some((f) => f.level === "RED");
+
+  // GREEN only when required automatic sources succeeded, at least one FACT exists,
+  // and no adverse (RED) evidence. Never emit GREEN alongside incomplete-search or zero facts.
+  if (!hasRed && coverage.greenEligible && factRecords.length > 0) {
     pushFlag(
       flags,
       "no-adverse-evidence",
       "GREEN",
       "No adverse evidence found",
-      "No adverse evidence found in the sources checked."
+      "No adverse evidence found in the sources checked. This is not a certification of a clean history."
     );
   }
 

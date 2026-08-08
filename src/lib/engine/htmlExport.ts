@@ -1,5 +1,6 @@
 // Portable, human-readable HTML export of a reconstruction report.
-import { ReconstructResponse, RiskFlagLevel } from "../types";
+import { ReconstructResponse, RiskFlagLevel, SourceCoverageState } from "../types";
+import { formatCoverageMatrix } from "./evidenceCoverage";
 
 function esc(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -16,11 +17,19 @@ function levelColor(level: RiskFlagLevel): string {
   return "#1e8449";
 }
 
+function coverageColor(state: SourceCoverageState): string {
+  if (state === "SUCCESS") return "#1e8449";
+  if (state === "FAILED" || state === "NOT_RUN") return "#c0392b";
+  return "#d68910";
+}
+
 export function buildHtmlReport(report: ReconstructResponse): string {
   const {
     vin,
     queryTimeUtc,
     identity,
+    riskLevel,
+    evidenceCoverage,
     recalls,
     records,
     timeline,
@@ -30,6 +39,13 @@ export function buildHtmlReport(report: ReconstructResponse): string {
     sourcesQueried,
     parserVersion,
   } = report;
+
+  const candidatesHtml =
+    identity.checkDigit.candidates.length > 0
+      ? `<tr><th>Check-digit candidates</th><td><ul>${identity.checkDigit.candidates
+          .map((c) => `<li><code>${esc(c)}</code></li>`)
+          .join("")}</ul><p class="meta">Possible alternate forms if mistyped — not proven correct.</p></td></tr>`
+      : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -54,12 +70,38 @@ export function buildHtmlReport(report: ReconstructResponse): string {
 <p class="meta">VIN <code>${esc(vin)}</code> &middot; Generated ${esc(queryTimeUtc)} &middot; Parser ${esc(parserVersion)}</p>
 <div class="disclaimer">
   This is a buyer due-diligence reconstruction, not a vehicle-history certification.
-  GREEN never means "verified clean" - it means no adverse evidence was found in the
-  sources checked. Absence of evidence is not evidence of absence.
+  <strong>Coverage</strong> (whether sources ran) is separate from <strong>risk</strong> (what was found).
+  GREEN never means "verified clean" — only that required automatic sources succeeded and no adverse
+  evidence was found in those sources. Absence of evidence is not evidence of absence.
 </div>
+
+<h2>Evidence coverage &amp; risk</h2>
+<table>
+  <tr><th>Completeness</th><td><span class="badge" style="background:${
+    evidenceCoverage.completeness === "COMPLETE" ? "#1e8449" : evidenceCoverage.completeness === "PARTIAL" ? "#d68910" : "#c0392b"
+  }">${esc(evidenceCoverage.completeness)}</span></td></tr>
+  <tr><th>Risk level</th><td><span class="badge" style="background:${levelColor(riskLevel)}">${esc(riskLevel)}</span></td></tr>
+  <tr><th>GREEN eligible</th><td>${evidenceCoverage.greenEligible ? "yes" : "no"}</td></tr>
+  <tr><th>Summary</th><td>${esc(evidenceCoverage.summary)}</td></tr>
+  <tr><th>Matrix</th><td><code>${esc(formatCoverageMatrix(evidenceCoverage))}</code></td></tr>
+</table>
+<table>
+  <tr><th>Source</th><th>State</th><th>Required</th><th>Detail</th></tr>
+${evidenceCoverage.sources
+  .map(
+    (s) =>
+      `<tr><td>${esc(s.label)}</td><td><span class="badge" style="background:${coverageColor(s.state)}">${esc(
+        s.state
+      )}</span></td><td>${s.required ? "yes" : "no"}</td><td>${esc(s.detail ?? "")}${
+        s.error ? " (" + esc(s.error) + ")" : ""
+      }</td></tr>`
+  )
+  .join("\n")}
+</table>
 
 <h2>1. Vehicle Identity</h2>
 <table>
+  <tr><th>Identity status</th><td><strong>${esc(identity.identityStatus)}</strong> — ${esc(identity.identityStatusDetail)}</td></tr>
   <tr><th>VIN</th><td>${esc(identity.vin)}</td></tr>
   <tr><th>Make</th><td>${esc(identity.make) || "UNKNOWN"}</td></tr>
   <tr><th>Model</th><td>${esc(identity.model) || "UNKNOWN"}</td></tr>
@@ -70,6 +112,7 @@ export function buildHtmlReport(report: ReconstructResponse): string {
   <tr><th>Manufacturer</th><td>${esc(identity.manufacturer) || "UNKNOWN"}</td></tr>
   <tr><th>Assembly Plant</th><td>${esc([identity.plantCity, identity.plantCountry].filter(Boolean).join(", ")) || "UNKNOWN"}</td></tr>
   <tr><th>Check Digit</th><td>${identity.checkDigit.valid ? "VALID" : "INVALID/NOT APPLICABLE"} - ${esc(identity.checkDigit.reason)}</td></tr>
+  ${candidatesHtml}
 </table>
 
 <h2>2. Recalls</h2>
@@ -86,7 +129,10 @@ ${
   </table>`
 }
 
-<h2>3 &amp; 4. Timeline</h2>
+<h2>3. Public history signals</h2>
+<p><strong>SEARCH_LEADS_GENERATED</strong> (not SEARCH_COMPLETED). Links were generated for human review; no pages were scraped.</p>
+
+<h2>4. Timeline</h2>
 ${
   timeline.length === 0
     ? "<p>No dated evidence retrieved. No dates or mileage have been invented.</p>"
@@ -105,6 +151,7 @@ ${
 }
 
 <h2>5. Risk Flags</h2>
+<p class="meta">Top-level risk: <span class="badge" style="background:${levelColor(riskLevel)}">${esc(riskLevel)}</span></p>
 <table><tr><th>Level</th><th>Title</th><th>Detail</th></tr>
 ${riskFlags
   .map(

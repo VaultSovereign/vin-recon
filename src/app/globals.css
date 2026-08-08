@@ -156,3 +156,23 @@ textarea {
   gap: 0.5rem;
   margin-bottom: 1rem;
 }
+
+.statusBanner {
+  background: rgba(128, 128, 128, 0.08);
+  border: 1px solid #666;
+  border-radius: 8px;
+  padding: 1rem 1rem 0.25rem;
+  margin-bottom: 2rem;
+}
+
+.meta {
+  color: #888;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  word-break: break-all;
+}

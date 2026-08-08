@@ -2,6 +2,7 @@
 // https://vpic.nhtsa.dot.gov/api/
 import { NormalizedRecord, VehicleIdentity } from "../types";
 import { validateVinCheckDigit } from "../vinCheckDigit";
+import { applyIdentityStatus } from "../engine/identityStatus";
 
 const VPIC_BASE = "https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValuesExtended";
 
@@ -28,12 +29,14 @@ function clean(value: string | null | undefined): string | null {
   return trimmed;
 }
 
+type IdentityCore = Omit<VehicleIdentity, "identityStatus" | "identityStatusDetail">;
+
 export async function decodeVinWithVpic(vin: string): Promise<VpicDecodeOutcome> {
   const sourceUrl = `${VPIC_BASE}/${encodeURIComponent(vin)}?format=json`;
   const retrievedAt = new Date().toISOString();
   const checkDigit = validateVinCheckDigit(vin);
 
-  const emptyIdentity: VehicleIdentity = {
+  const emptyCore: IdentityCore = {
     vin,
     make: null,
     model: null,
@@ -51,8 +54,9 @@ export async function decodeVinWithVpic(vin: string): Promise<VpicDecodeOutcome>
   try {
     const res = await fetch(sourceUrl, { signal: AbortSignal.timeout(15000) });
     if (!res.ok) {
+      const error = `NHTSA vPIC responded with HTTP ${res.status}`;
       return {
-        identity: emptyIdentity,
+        identity: applyIdentityStatus(emptyCore, error),
         record: {
           vin,
           source: "NHTSA vPIC",
@@ -71,7 +75,7 @@ export async function decodeVinWithVpic(vin: string): Promise<VpicDecodeOutcome>
         },
         raw: null,
         sourceUrl,
-        error: `NHTSA vPIC responded with HTTP ${res.status}`,
+        error,
       };
     }
 
@@ -79,8 +83,9 @@ export async function decodeVinWithVpic(vin: string): Promise<VpicDecodeOutcome>
     const result = data.Results?.[0] ?? null;
 
     if (!result) {
+      const error = "NHTSA vPIC returned no results.";
       return {
-        identity: emptyIdentity,
+        identity: applyIdentityStatus(emptyCore, error),
         record: {
           vin,
           source: "NHTSA vPIC",
@@ -99,11 +104,11 @@ export async function decodeVinWithVpic(vin: string): Promise<VpicDecodeOutcome>
         },
         raw: null,
         sourceUrl,
-        error: "NHTSA vPIC returned no results.",
+        error,
       };
     }
 
-    const identity: VehicleIdentity = {
+    const core: IdentityCore = {
       vin,
       make: clean(result.Make),
       model: clean(result.Model),
@@ -119,6 +124,8 @@ export async function decodeVinWithVpic(vin: string): Promise<VpicDecodeOutcome>
       plantCompany: clean(result.PlantCompanyName),
       checkDigit,
     };
+
+    const identity = applyIdentityStatus(core, null);
 
     const record: NormalizedRecord = {
       vin,
@@ -140,8 +147,9 @@ export async function decodeVinWithVpic(vin: string): Promise<VpicDecodeOutcome>
     return { identity, record, raw: result, sourceUrl, error: null };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    const error = `Failed to reach NHTSA vPIC: ${message}`;
     return {
-      identity: emptyIdentity,
+      identity: applyIdentityStatus(emptyCore, error),
       record: {
         vin,
         source: "NHTSA vPIC",
@@ -160,7 +168,7 @@ export async function decodeVinWithVpic(vin: string): Promise<VpicDecodeOutcome>
       },
       raw: null,
       sourceUrl,
-      error: `Failed to reach NHTSA vPIC: ${message}`,
+      error,
     };
   }
 }

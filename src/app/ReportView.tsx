@@ -1,8 +1,9 @@
 "use client";
 
-import { ReconstructResponse } from "@/lib/types";
+import { ReconstructResponse, RiskFlagLevel, SourceCoverageState } from "@/lib/types";
 import { buildVinSearchLeads } from "@/lib/adapters/searchDiscovery";
 import { buildHtmlReport } from "@/lib/engine/htmlExport";
+import { formatCoverageMatrix } from "@/lib/engine/evidenceCoverage";
 
 function downloadFile(filename: string, content: string, mime: string) {
   const blob = new Blob([content], { type: mime });
@@ -16,8 +17,34 @@ function downloadFile(filename: string, content: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
+function coverageBadgeClass(state: SourceCoverageState): string {
+  switch (state) {
+    case "SUCCESS":
+      return "badge badge-GREEN";
+    case "FAILED":
+    case "NOT_RUN":
+      return "badge badge-RED";
+    case "PARTIAL":
+    case "SEARCH_LEADS_GENERATED":
+    case "NOT_PROVIDED":
+    default:
+      return "badge badge-AMBER";
+  }
+}
+
+function completenessClass(completeness: ReconstructResponse["evidenceCoverage"]["completeness"]): string {
+  if (completeness === "COMPLETE") return "badge badge-GREEN";
+  if (completeness === "PARTIAL") return "badge badge-AMBER";
+  return "badge badge-RED";
+}
+
+function riskClass(level: RiskFlagLevel): string {
+  return `badge badge-${level}`;
+}
+
 export default function ReportView({ report }: { report: ReconstructResponse }) {
   const leads = buildVinSearchLeads(report.vin);
+  const { evidenceCoverage, identity } = report;
 
   return (
     <div>
@@ -30,28 +57,147 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
         </button>
       </div>
 
+      <section className="statusBanner">
+        <h2>Evidence coverage &amp; risk (separate)</h2>
+        <p className="meta">
+          Coverage describes whether sources actually ran. Risk describes adverse evidence found.
+          GREEN risk is only allowed when required automatic sources succeeded.
+        </p>
+        <table>
+          <tbody>
+            <tr>
+              <th>Completeness</th>
+              <td>
+                <span className={completenessClass(evidenceCoverage.completeness)}>
+                  {evidenceCoverage.completeness}
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <th>Risk level</th>
+              <td>
+                <span className={riskClass(report.riskLevel)}>{report.riskLevel}</span>
+              </td>
+            </tr>
+            <tr>
+              <th>GREEN eligible</th>
+              <td>{evidenceCoverage.greenEligible ? "yes" : "no"}</td>
+            </tr>
+            <tr>
+              <th>Summary</th>
+              <td>{evidenceCoverage.summary}</td>
+            </tr>
+            <tr>
+              <th>Matrix</th>
+              <td className="mono">{formatCoverageMatrix(evidenceCoverage)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Source coverage matrix</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th>State</th>
+              <th>Required</th>
+              <th>Detail</th>
+            </tr>
+          </thead>
+          <tbody>
+            {evidenceCoverage.sources.map((s) => (
+              <tr key={s.sourceId}>
+                <td>{s.label}</td>
+                <td>
+                  <span className={coverageBadgeClass(s.state)}>{s.state}</span>
+                </td>
+                <td>{s.required ? "yes" : "no"}</td>
+                <td>
+                  {s.detail ?? "—"}
+                  {s.error ? ` (${s.error})` : ""}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
       <section>
         <h2>1. Vehicle Identity</h2>
         <table>
           <tbody>
-            <tr><th>VIN</th><td>{report.identity.vin}</td></tr>
-            <tr><th>Make</th><td>{report.identity.make ?? "UNKNOWN"}</td></tr>
-            <tr><th>Model</th><td>{report.identity.model ?? "UNKNOWN"}</td></tr>
-            <tr><th>Model Year</th><td>{report.identity.modelYear ?? "UNKNOWN"}</td></tr>
-            <tr><th>Engine</th><td>{report.identity.engine || "UNKNOWN"}</td></tr>
-            <tr><th>Drivetrain</th><td>{report.identity.drivetrain ?? "UNKNOWN"}</td></tr>
-            <tr><th>Body</th><td>{report.identity.body ?? "UNKNOWN"}</td></tr>
-            <tr><th>Manufacturer</th><td>{report.identity.manufacturer ?? "UNKNOWN"}</td></tr>
+            <tr>
+              <th>Identity status</th>
+              <td>
+                <span className="badge badge-AMBER">{identity.identityStatus}</span>
+                {" — "}
+                {identity.identityStatusDetail}
+              </td>
+            </tr>
+            <tr>
+              <th>VIN</th>
+              <td className="mono">{identity.vin}</td>
+            </tr>
+            <tr>
+              <th>Make</th>
+              <td>{identity.make ?? "UNKNOWN"}</td>
+            </tr>
+            <tr>
+              <th>Model</th>
+              <td>{identity.model ?? "UNKNOWN"}</td>
+            </tr>
+            <tr>
+              <th>Model Year</th>
+              <td>{identity.modelYear ?? "UNKNOWN"}</td>
+            </tr>
+            <tr>
+              <th>Engine</th>
+              <td>{identity.engine || "UNKNOWN"}</td>
+            </tr>
+            <tr>
+              <th>Drivetrain</th>
+              <td>{identity.drivetrain ?? "UNKNOWN"}</td>
+            </tr>
+            <tr>
+              <th>Body</th>
+              <td>{identity.body ?? "UNKNOWN"}</td>
+            </tr>
+            <tr>
+              <th>Manufacturer</th>
+              <td>{identity.manufacturer ?? "UNKNOWN"}</td>
+            </tr>
             <tr>
               <th>Assembly Plant</th>
-              <td>{[report.identity.plantCity, report.identity.plantCountry].filter(Boolean).join(", ") || "UNKNOWN"}</td>
+              <td>{[identity.plantCity, identity.plantCountry].filter(Boolean).join(", ") || "UNKNOWN"}</td>
             </tr>
             <tr>
               <th>Check Digit</th>
               <td>
-                {report.identity.checkDigit.valid ? "VALID" : "INVALID / NOT APPLICABLE"} &mdash; {report.identity.checkDigit.reason}
+                {identity.checkDigit.valid ? "VALID" : "INVALID / NOT APPLICABLE"} &mdash; {identity.checkDigit.reason}
+                {identity.checkDigit.computedCheckDigit != null && (
+                  <span className="meta">
+                    {" "}
+                    (supplied {identity.checkDigit.suppliedCheckDigit ?? "—"}, computed{" "}
+                    {identity.checkDigit.computedCheckDigit})
+                  </span>
+                )}
               </td>
             </tr>
+            {identity.checkDigit.candidates.length > 0 && (
+              <tr>
+                <th>Check-digit candidates</th>
+                <td>
+                  <p className="meta">
+                    Possible alternate VIN forms if the input was mistyped (not proven correct):
+                  </p>
+                  <ul className="mono">
+                    {identity.checkDigit.candidates.map((c) => (
+                      <li key={c}>{c}</li>
+                    ))}
+                  </ul>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </section>
@@ -64,7 +210,12 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
         ) : (
           <table>
             <thead>
-              <tr><th>Campaign</th><th>Component</th><th>Summary</th><th>Report Date</th></tr>
+              <tr>
+                <th>Campaign</th>
+                <th>Component</th>
+                <th>Summary</th>
+                <th>Report Date</th>
+              </tr>
             </thead>
             <tbody>
               {report.recalls.map((r, i) => (
@@ -83,9 +234,9 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
       <section>
         <h2>3. Public History Signals</h2>
         <p>
-          The following public search leads were generated for the exact VIN. These links are not
-          automatically scraped (to respect CAPTCHAs, robots.txt, and access controls) &mdash; open
-          each one and manually record any findings.
+          <strong>Status: SEARCH_LEADS_GENERATED</strong> — not SEARCH_COMPLETED. These links are not
+          automatically scraped (to respect CAPTCHAs, robots.txt, and access controls). Open each one and
+          manually record any findings. Until you do, public web history is <em>not</em> established.
         </p>
         <ul className="linkList">
           {leads.map((lead) => (
@@ -106,7 +257,13 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
           <table>
             <thead>
               <tr>
-                <th>Date</th><th>Source</th><th>Location</th><th>Mileage</th><th>Event</th><th>Evidence</th><th>Confidence</th>
+                <th>Date</th>
+                <th>Source</th>
+                <th>Location</th>
+                <th>Mileage</th>
+                <th>Event</th>
+                <th>Evidence</th>
+                <th>Confidence</th>
               </tr>
             </thead>
             <tbody>
@@ -117,7 +274,15 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
                   <td>{t.location ?? "UNKNOWN"}</td>
                   <td>{t.mileage !== null ? `${t.mileage} ${t.mileageUnit ?? ""}` : "UNKNOWN"}</td>
                   <td>{t.event}</td>
-                  <td>{t.evidenceUrl ? <a href={t.evidenceUrl} target="_blank" rel="noopener noreferrer">link</a> : "—"}</td>
+                  <td>
+                    {t.evidenceUrl ? (
+                      <a href={t.evidenceUrl} target="_blank" rel="noopener noreferrer">
+                        link
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td>{t.confidence}</td>
                 </tr>
               ))}
@@ -129,21 +294,31 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
       <section>
         <h2>5. Damage / Auction Evidence</h2>
         <p>
-          No structured auction/damage evidence has been automatically ingested. Use the public
-          history leads above or import a NICB VINCheck result to add evidence here.
+          No structured auction/damage evidence has been automatically ingested. Use the public history
+          leads above or import a NICB VINCheck result to add evidence here.
         </p>
       </section>
 
       <section>
         <h2>6. Risk Flags</h2>
+        <p className="meta">
+          Top-level risk: <span className={riskClass(report.riskLevel)}>{report.riskLevel}</span>. GREEN never
+          means &quot;verified clean.&quot;
+        </p>
         <table>
           <thead>
-            <tr><th>Level</th><th>Title</th><th>Detail</th></tr>
+            <tr>
+              <th>Level</th>
+              <th>Title</th>
+              <th>Detail</th>
+            </tr>
           </thead>
           <tbody>
             {report.riskFlags.map((f) => (
               <tr key={f.id}>
-                <td><span className={`badge badge-${f.level}`}>{f.level}</span></td>
+                <td>
+                  <span className={`badge badge-${f.level}`}>{f.level}</span>
+                </td>
                 <td>{f.title}</td>
                 <td>{f.detail}</td>
               </tr>
@@ -159,7 +334,12 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
         ) : (
           <table>
             <thead>
-              <tr><th>Claim</th><th>Verdict</th><th>Evidence</th><th>Source</th></tr>
+              <tr>
+                <th>Claim</th>
+                <th>Verdict</th>
+                <th>Evidence</th>
+                <th>Source</th>
+              </tr>
             </thead>
             <tbody>
               {report.claimResults.map((c, i) => (
@@ -167,7 +347,15 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
                   <td>{c.claim}</td>
                   <td>{c.verdict}</td>
                   <td>{c.evidence}</td>
-                  <td>{c.source ? <a href={c.source} target="_blank" rel="noopener noreferrer">link</a> : "—"}</td>
+                  <td>
+                    {c.source ? (
+                      <a href={c.source} target="_blank" rel="noopener noreferrer">
+                        link
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -188,7 +376,14 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
         <h2>Raw Evidence Records</h2>
         <table>
           <thead>
-            <tr><th>Source</th><th>Type</th><th>Category</th><th>Confidence</th><th>URL</th><th>Excerpt</th></tr>
+            <tr>
+              <th>Source</th>
+              <th>Type</th>
+              <th>Category</th>
+              <th>Confidence</th>
+              <th>URL</th>
+              <th>Excerpt</th>
+            </tr>
           </thead>
           <tbody>
             {report.records.map((r, i) => (
@@ -197,7 +392,15 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
                 <td>{r.event_type}</td>
                 <td>{r.evidence_type}</td>
                 <td>{r.confidence}</td>
-                <td>{r.source_url ? <a href={r.source_url} target="_blank" rel="noopener noreferrer">link</a> : "—"}</td>
+                <td>
+                  {r.source_url ? (
+                    <a href={r.source_url} target="_blank" rel="noopener noreferrer">
+                      link
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td>{(r.raw_excerpt ?? "").slice(0, 200)}</td>
               </tr>
             ))}
