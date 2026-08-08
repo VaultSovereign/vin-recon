@@ -1,0 +1,158 @@
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+html {
+  height: 100%;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  html {
+    color-scheme: dark;
+  }
+}
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+  width: 100%;
+}
+
+h1, h2, h3 {
+  margin-bottom: 0.5rem;
+}
+
+section {
+  margin-bottom: 2rem;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+th, td {
+  border: 1px solid #444;
+  padding: 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: rgba(128, 128, 128, 0.15);
+}
+
+.vinForm {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.vinForm input {
+  flex: 1;
+  min-width: 240px;
+  padding: 0.6rem 0.75rem;
+  font-size: 1rem;
+  font-family: monospace;
+  text-transform: uppercase;
+}
+
+button {
+  padding: 0.6rem 1.1rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 4px;
+  color: white;
+  font-weight: bold;
+  font-size: 0.8rem;
+}
+
+.badge-GREEN { background: #1e8449; }
+.badge-AMBER { background: #d68910; }
+.badge-RED { background: #c0392b; }
+
+.disclaimer {
+  background: rgba(255, 220, 100, 0.15);
+  border: 1px solid #d68910;
+  padding: 1rem;
+  border-radius: 6px;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.error {
+  background: rgba(220, 50, 50, 0.15);
+  border: 1px solid #c0392b;
+  padding: 1rem;
+  border-radius: 6px;
+  margin-bottom: 1.5rem;
+}
+
+textarea {
+  width: 100%;
+  font-family: monospace;
+  font-size: 0.9rem;
+  padding: 0.5rem;
+}
+
+.claimsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.linkList a {
+  text-decoration: underline;
+}
+
+.exportButtons {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
