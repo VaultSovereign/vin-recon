@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildSearchPack, defaultOpenPackIds } from "@/lib/engine/searchPack";
 import { isWellFormedVin } from "@/lib/vinCheckDigit";
+import { ResearchRegion } from "@/lib/types";
 
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -22,7 +23,12 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const pack = buildSearchPack(vin);
+  const allowed = new Set<ResearchRegion>(["US", "CA", "UK", "EU", "PL"]);
+  const requestedRegions = (req.nextUrl.searchParams.get("regions") ?? "US")
+    .split(",")
+    .map((region) => region.trim().toUpperCase())
+    .filter((region): region is ResearchRegion => allowed.has(region as ResearchRegion));
+  const pack = buildSearchPack(vin, requestedRegions);
   return NextResponse.json(
     {
       pack,

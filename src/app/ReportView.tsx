@@ -73,7 +73,7 @@ function PackGroup({ title, items, warn }: { title: string; items: SearchPackIte
 }
 
 export default function ReportView({ report }: { report: ReconstructResponse }) {
-  const { evidenceCoverage, identity, searchPack, findings } = report;
+  const { evidenceCoverage, identity, searchPack, findings, governmentContext } = report;
   const damageFindings = findings.filter((f) => f.damage || /auction|salvage|copart|iaai|bidfax/i.test(f.sourceLabel + (f.note || "")));
   const vehicleName = [identity.modelYear, identity.make, identity.model].filter(Boolean).join(" ") || "Vehicle report";
   const coverageSummary = evidenceCoverage.greenEligible
@@ -174,7 +174,9 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
       <nav className="reportNav" aria-label="Report sections">
         <a href="#identity">Vehicle</a>
         <a href="#recalls">Recalls</a>
+        <a href="#government-context">Model context</a>
         <a href="#search-pack">Research links</a>
+        <a href="#corroboration">Corroboration</a>
         <a href="#timeline">Timeline</a>
         <a href="#risk-flags">Risk flags</a>
         <a href="#purchase-questions">Questions</a>
@@ -262,7 +264,33 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
 
       <section className="reportSection" id="recalls">
         <h2>Factory data and recalls</h2>
-        <h3>Recalls ({report.recalls.length})</h3>
+        <div className="plainGrid">
+          <article className="plainCard">
+            <span className="statusLabel">Model-level query</span>
+            <strong>{report.recallQuery.status}</strong>
+            <p>{report.recallQuery.detail}</p>
+            <p className="meta">
+              Canonical query: {[
+                report.recallQuery.canonical.modelYear,
+                report.recallQuery.canonical.make,
+                report.recallQuery.canonical.model,
+              ].filter(Boolean).join(" ") || "UNRESOLVED"}
+            </p>
+          </article>
+          <article className="plainCard">
+            <span className="statusLabel">VIN-specific manual check</span>
+            <strong>{report.vinRecallVerification.status}</strong>
+            <p>
+              {report.vinRecallVerification.status === "NOT_CHECKED"
+                ? "Not checked. The model-level API cannot establish whether this VIN still needs a remedy."
+                : "Result recorded by the investigator; VIN Recon did not retrieve the page."}
+            </p>
+            <a href={report.vinRecallVerification.sourceUrl} target="_blank" rel="noopener noreferrer">
+              Open official NHTSA VIN check
+            </a>
+          </article>
+        </div>
+        <h3>Model-level recall campaigns ({report.recalls.length})</h3>
         {report.recalls.length === 0 ? (
           <p>No recalls found for the decoded make/model/year, or recall lookup could not be performed.</p>
         ) : (
@@ -289,12 +317,89 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
         )}
       </section>
 
+      <section className="reportSection" id="government-context">
+        <h2>Government model context</h2>
+        <p className="scopeNoticeInline">{governmentContext.disclaimer}</p>
+        <div className="statusGrid contextStats">
+          <article className="statusCard">
+            <span className="statusLabel">NHTSA complaints</span>
+            <strong>{governmentContext.complaints.totalCount ?? "UNKNOWN"}</strong>
+            <p>{governmentContext.complaints.state} · model-level reports, not this vehicle&apos;s history.</p>
+          </article>
+          <article className="statusCard">
+            <span className="statusLabel">Complaint indicators</span>
+            <strong>
+              {governmentContext.complaints.crashCount} crash · {governmentContext.complaints.fireCount} fire
+            </strong>
+            <p>
+              Aggregated complaint fields: {governmentContext.complaints.injuryCount} injuries ·{" "}
+              {governmentContext.complaints.deathCount} deaths. These are unverified consumer complaints.
+            </p>
+          </article>
+          <article className="statusCard">
+            <span className="statusLabel">Context links</span>
+            <a href={governmentContext.investigations.sourceUrl} target="_blank" rel="noopener noreferrer">
+              NHTSA investigations
+            </a>
+            <a
+              href={governmentContext.manufacturerCommunications.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Manufacturer communications / TSBs
+            </a>
+          </article>
+        </div>
+        {governmentContext.complaints.topComponents.length > 0 && (
+          <p className="meta">
+            Most-reported component labels: {governmentContext.complaints.topComponents
+              .slice(0, 5)
+              .map((item) => `${item.component} (${item.count})`)
+              .join(" · ")}
+          </p>
+        )}
+        {governmentContext.complaints.recent.length > 0 && (
+          <details className="coverageDetails">
+            <summary>Recent complaint sample ({governmentContext.complaints.recent.length})</summary>
+            <table>
+              <thead>
+                <tr>
+                  <th>ODI</th>
+                  <th>Filed</th>
+                  <th>Components</th>
+                  <th>Indicators</th>
+                  <th>Summary</th>
+                </tr>
+              </thead>
+              <tbody>
+                {governmentContext.complaints.recent.map((complaint) => (
+                  <tr key={complaint.odiNumber}>
+                    <td>{complaint.odiNumber}</td>
+                    <td>{complaint.dateComplaintFiled ?? "UNKNOWN"}</td>
+                    <td>{complaint.components}</td>
+                    <td>
+                      {[
+                        complaint.crash ? "crash" : null,
+                        complaint.fire ? "fire" : null,
+                        complaint.numberOfInjuries ? `${complaint.numberOfInjuries} injuries` : null,
+                        complaint.numberOfDeaths ? `${complaint.numberOfDeaths} deaths` : null,
+                      ].filter(Boolean).join(" · ") || "none recorded"}
+                    </td>
+                    <td>{complaint.summary.slice(0, 350)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+        )}
+      </section>
+
       <section className="reportSection" id="search-pack">
         <h2>Public-history research links</h2>
         <p>
           <strong>Status: SEARCH_LEADS_GENERATED</strong> — not SEARCH_COMPLETED. Nothing is scraped.
           Privacy engines (Startpage / Brave / DDG) are preferred; Google is opt-in. Open links, verify
-          yourself, then <strong>save findings</strong> so they become FACT records.
+          yourself, then <strong>save observations</strong> with exact provenance. They do not become automatic FACTs.
         </p>
         <div className="exportButtons">
           <button
@@ -319,13 +424,14 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
         <PackGroup title="Auction / salvage" items={searchPack.auctionItems} />
         <PackGroup title="Government / manual" items={searchPack.governmentItems} />
         <PackGroup title="Market / classifieds queries" items={searchPack.marketItems} />
+        <PackGroup title={`Regional official tools (${searchPack.regions.join(", ")})`} items={searchPack.regionalItems} />
         <PackGroup title="Google" items={searchPack.googleItems} warn />
       </section>
 
       <section className="reportSection" id="saved-findings">
-        <h2>Saved findings ({findings.length})</h2>
+        <h2>Saved source observations ({findings.length})</h2>
         {findings.length === 0 ? (
-          <p className="meta">No user-confirmed findings yet. Use the form above or the browser addon.</p>
+          <p className="meta">No user-attested source observations yet. Use the form above or the browser addon.</p>
         ) : (
           <table>
             <thead>
@@ -335,6 +441,7 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
                 <th>Mileage</th>
                 <th>Title / damage</th>
                 <th>Note</th>
+                <th>Provenance</th>
                 <th>URL</th>
               </tr>
             </thead>
@@ -349,6 +456,10 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
                   </td>
                   <td>{f.note || "—"}</td>
                   <td>
+                    {f.sourceOrigin || f.sourceLabel} · {f.sourceRelationship}
+                    {f.sourceExcerpt ? <p className="meta">Excerpt: {f.sourceExcerpt}</p> : null}
+                  </td>
+                  <td>
                     {f.sourceUrl ? (
                       <a href={f.sourceUrl} target="_blank" rel="noopener noreferrer">
                         link
@@ -362,6 +473,41 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
             </tbody>
           </table>
         )}
+      </section>
+
+      <section className="reportSection" id="paid-reports">
+        <h2>Imported paid-report observations ({report.paidReports.length})</h2>
+        {report.paidReports.length === 0 ? (
+          <p className="meta">No user-obtained provider report was transcribed.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>VIN match</th>
+                <th>Report date</th>
+                <th>Warning</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.paidReports.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.provider}</td>
+                  <td>{item.providerKind}</td>
+                  <td>{item.status}</td>
+                  <td>{item.vinMatches === null ? "NOT ESTABLISHED" : item.vinMatches ? "MATCH" : "MISMATCH"}</td>
+                  <td>{item.reportDate ?? "UNKNOWN"}</td>
+                  <td>{item.warning ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <p className="meta">
+          Imported provider statements are OBSERVATION records. They are not independently retrieved by VIN Recon.
+        </p>
       </section>
 
       <section className="reportSection" id="timeline">
@@ -406,12 +552,48 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
         )}
       </section>
 
+      <section className="reportSection" id="corroboration">
+        <h2>Evidence corroboration ({report.evidenceClusters.length} event clusters)</h2>
+        <p className="meta">
+          Independent-source count uses the recorded underlying origin. Mirrors and syndicated copies do not become
+          separate confirmations.
+        </p>
+        {report.evidenceClusters.length === 0 ? (
+          <p>No event evidence was available to cluster.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Date</th>
+                <th>Event</th>
+                <th>Summary</th>
+                <th>Records</th>
+                <th>Independent sources</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.evidenceClusters.map((cluster) => (
+                <tr key={cluster.id}>
+                  <td>{cluster.status}</td>
+                  <td>{cluster.eventDate ?? "UNKNOWN"}</td>
+                  <td>{cluster.eventType}</td>
+                  <td>{cluster.summary}</td>
+                  <td>{cluster.recordIndexes.map((index) => index + 1).join(", ")}</td>
+                  <td>{cluster.independentSourceCount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
       <section className="reportSection" id="damage-evidence">
         <h2>Damage and auction evidence</h2>
         {damageFindings.length === 0 ? (
           <p>
-            No user-confirmed auction/damage findings yet. Open Bidfax / Copart / IAAI from the search pack,
-            then save a finding with damage/title notes.
+            No auction/damage source observations have been recorded yet. Open Bidfax / Copart / IAAI from
+            the search pack, then record the source excerpt separately from your investigator note.
           </p>
         ) : (
           <table>
@@ -527,6 +709,7 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
               <th>Type</th>
               <th>Category</th>
               <th>Confidence</th>
+              <th>Provenance</th>
               <th>URL</th>
               <th>Excerpt</th>
             </tr>
@@ -538,6 +721,9 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
                 <td>{r.event_type}</td>
                 <td>{r.evidence_type}</td>
                 <td>{r.confidence}</td>
+                <td>
+                  {r.provenance.kind} · {r.provenance.origin} · {r.provenance.relationship}
+                </td>
                 <td>
                   {r.source_url ? (
                     <a href={r.source_url} target="_blank" rel="noopener noreferrer">
@@ -553,6 +739,30 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
           </tbody>
         </table>
       </section>
+
+      <details className="reportSection diagnosticsPanel">
+        <summary>Run diagnostics · {report.diagnostics.totalDurationMs} ms · {report.diagnostics.retention}</summary>
+        <table>
+          <thead>
+            <tr>
+              <th>Adapter</th>
+              <th>State</th>
+              <th>Duration</th>
+              <th>Detail</th>
+            </tr>
+          </thead>
+          <tbody>
+            {report.diagnostics.adapters.map((adapter) => (
+              <tr key={adapter.sourceId}>
+                <td>{adapter.sourceId}</td>
+                <td>{adapter.state}</td>
+                <td>{adapter.durationMs} ms</td>
+                <td>{adapter.detail ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
     </div>
   );
 }

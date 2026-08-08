@@ -1,11 +1,11 @@
-# VIN Recon browser addon (MV3)
+# VIN Recon browser addon (MV3, v0.2.0)
 
 Privacy-first companion for [VIN Recon](../../README.md):
 
-1. **Detect** 17-character VINs on the current page  
-2. **Open a privacy search pack** (Startpage / Brave / DDG + Bidfax / Copart / IAAI / NICB)  
-3. **Save findings** you personally verified  
-4. **Reconstruct** via your local/deployed API with those findings as FACT records  
+1. **Detect** 17-character VINs on the current page
+2. **Open a privacy search pack** (Startpage / Brave / DDG + Bidfax / Copart / IAAI / NICB)
+3. **Save source observations** you personally inspected
+4. **Reconstruct** via your local/deployed API with provenance-retaining OBSERVATION records
 
 Google search tabs are **opt-in only**. Nothing is scraped; CAPTCHA sites (NICB, etc.) stay manual.
 
@@ -23,15 +23,17 @@ Firefox: use temporary add-on load from `about:debugging` (MV3 support varies by
 1. Open a listing page (AutoScout, Mobile.de, Facebook Marketplace, etc.).
 2. Click the VIN Recon icon → **Re-scan page** if needed.
 3. **Open privacy search pack** (opens tabs; review each yourself).
-4. **Save finding** for anything you verified (URL, damage, mileage, note).
+4. **Save observation** for anything you inspected (source excerpt, origin, URL, damage, mileage, note).
 5. **RECONSTRUCT now** (API) or **Open in VIN Recon app**.
 
 ## Privacy
 
 - Default pack avoids Google.
-- No VIN telemetry; findings stay in `chrome.storage.local` on your machine.
+- No VIN telemetry; observations stay in `chrome.storage.local` on your machine.
 - Reconstruct only calls the app base URL you configure.
 
 ## Sync note
 
 `lib/searchPack.js` mirrors `src/lib/engine/searchPack.ts` — update both when changing pack URLs.
+The web app can add Canada, UK, EU, and Poland packs; the extension's one-click default remains
+the US baseline.

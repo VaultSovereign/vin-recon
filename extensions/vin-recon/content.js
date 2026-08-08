@@ -7,7 +7,7 @@
     try {
       parts.push(document.title || "");
       parts.push(document.body ? document.body.innerText.slice(0, 200000) : "");
-    } catch (_) {
+    } catch {
       /* cross-origin edge */
     }
     return parts.join("\n");

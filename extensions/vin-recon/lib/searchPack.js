@@ -34,6 +34,18 @@
         url: buildEngineSearchUrl("startpage", vin, "(salvage OR flood OR auction OR Copart OR IAAI OR Bidfax)"),
         category: "privacy_web",
       },
+      {
+        id: "sp-title",
+        label: "Startpage (VIN + title/brand/odometer)",
+        url: buildEngineSearchUrl("startpage", vin, "(title OR brand OR odometer OR mileage OR rollback)"),
+        category: "privacy_web",
+      },
+      {
+        id: "brave-theft",
+        label: "Brave Search (VIN + stolen/theft/recovered)",
+        url: buildEngineSearchUrl("brave", vin, "(stolen OR theft OR recovered)"),
+        category: "privacy_web",
+      },
       { id: "brave-images", label: "Brave Images (exact VIN)", url: `https://search.brave.com/images?q=${phrase}`, category: "privacy_web" },
     ];
 
@@ -67,17 +79,28 @@
     ];
 
     const marketItems = [
-      { id: "sp-mobilede", label: "Startpage: VIN + site:mobile.de", url: buildEngineSearchUrl("startpage", vin, "site:mobile.de"), category: "market" },
       {
-        id: "sp-autoscout",
-        label: "Startpage: VIN + site:autoscout24.*",
-        url: buildEngineSearchUrl("startpage", vin, "site:autoscout24.de OR site:autoscout24.com"),
+        id: "sp-us-market",
+        label: "Startpage: VIN + US classifieds",
+        url: buildEngineSearchUrl("startpage", vin, "(craigslist OR facebook marketplace OR cars.com OR autotrader)"),
         category: "market",
       },
     ];
 
+    const regionalItems = [];
     const allItems = [...privacyItems, ...googleItems, ...auctionItems, ...governmentItems, ...marketItems];
-    return { vin, generatedAt: new Date().toISOString(), privacyItems, googleItems, auctionItems, governmentItems, marketItems, allItems };
+    return {
+      vin,
+      generatedAt: new Date().toISOString(),
+      privacyItems,
+      googleItems,
+      auctionItems,
+      governmentItems,
+      marketItems,
+      regionalItems,
+      regions: ["US"],
+      allItems,
+    };
   }
 
   function defaultOpenPackIds() {

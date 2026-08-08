@@ -42,7 +42,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   color: inherit;
   font: inherit;
 }
@@ -207,7 +208,8 @@ h4 {
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   border: 1px solid var(--line-strong);
   border-radius: 4px;
@@ -219,6 +221,11 @@ input {
   padding: 0.55rem 0.7rem;
 }
 
+select {
+  min-height: 2.65rem;
+  padding: 0.5rem 2rem 0.5rem 0.65rem;
+}
+
 textarea {
   padding: 0.65rem 0.7rem;
   line-height: 1.45;
@@ -226,7 +233,8 @@ textarea {
 }
 
 input:focus,
-textarea:focus {
+textarea:focus,
+select:focus {
   border-color: var(--accent);
   outline: 3px solid var(--focus);
   outline-offset: 0;
@@ -397,6 +405,46 @@ button:disabled {
   font-weight: 400;
 }
 
+.findingGrid select,
+.fieldTestGrid select {
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.compactFieldset {
+  margin-bottom: 1rem;
+}
+
+.noTopPadding {
+  padding-top: 0;
+}
+
+.wideField {
+  grid-column: span 2;
+}
+
+.checkboxGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1.1rem;
+  margin-top: 0.8rem;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #34414c;
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+.checkboxLabel input {
+  width: 1rem;
+  min-height: 1rem;
+  margin: 0;
+}
+
 .findingForm > .secondaryButton {
   margin-top: 0.7rem;
 }
@@ -474,6 +522,24 @@ button:disabled {
   gap: 0.5rem;
 }
 
+.buttonLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.65rem;
+  padding: 0.55rem 0.95rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: #fff;
+  background: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.buttonLink:hover {
+  color: #fff;
+  background: var(--accent-hover);
+}
+
 .reportNav {
   display: flex;
   flex-wrap: wrap;
@@ -519,6 +585,79 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
+}
+
+.plainGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.plainCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+}
+
+.plainCard p {
+  font-size: 0.86rem;
+}
+
+.scopeNoticeInline {
+  margin-bottom: 0.8rem;
+  padding: 0.75rem 0.85rem;
+  border-left: 3px solid var(--line-strong);
+  color: var(--muted);
+  background: #e9edf0;
+  font-size: 0.86rem;
+}
+
+.contextStats {
+  margin-bottom: 0.75rem;
+}
+
+.fieldTestPanel,
+.analystReview {
+  padding: 1rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.fieldTestGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin: 1rem 0;
+}
+
+.fieldTestGrid > label:not(.checkboxLabel) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: #34414c;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.fieldTestNote {
+  grid-column: 1 / -1;
+}
+
+.analystReview > p,
+.analystReview > .fieldBlock {
+  margin-bottom: 0.8rem;
+}
+
+.diagnosticsPanel > summary {
+  cursor: pointer;
+  font-weight: 700;
 }
 
 .statusCard {
@@ -664,8 +803,10 @@ tbody tr:nth-child(even) td {
 
   .vinForm,
   .advancedGrid,
-  .findingGrid,
-  .statusGrid {
+    .findingGrid,
+    .statusGrid,
+    .plainGrid,
+    .fieldTestGrid {
     grid-template-columns: 1fr;
   }
 
@@ -717,6 +858,15 @@ tbody tr:nth-child(even) td {
 
   .exportButtons button {
     flex: 1;
+  }
+
+  .buttonLink {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .wideField {
+    grid-column: auto;
   }
 
   .statusCard {

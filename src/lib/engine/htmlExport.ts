@@ -11,6 +11,21 @@ function esc(value: unknown): string {
     .replace(/"/g, "&quot;");
 }
 
+function safeHref(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? esc(url.toString()) : null;
+  } catch {
+    return null;
+  }
+}
+
+function link(value: string | null, label = "link"): string {
+  const href = safeHref(value);
+  return href ? `<a href="${href}">${esc(label)}</a>` : "";
+}
+
 function levelColor(level: RiskFlagLevel): string {
   if (level === "RED") return "#c0392b";
   if (level === "AMBER") return "#d68910";
@@ -31,15 +46,21 @@ export function buildHtmlReport(report: ReconstructResponse): string {
     riskLevel,
     evidenceCoverage,
     recalls,
+    recallQuery,
+    vinRecallVerification,
     records,
     timeline,
+    evidenceClusters,
     riskFlags,
     claimResults,
     purchaseQuestions,
     sourcesQueried,
     parserVersion,
     findings,
+    paidReports,
     searchPack,
+    governmentContext,
+    diagnostics,
   } = report;
 
   const candidatesHtml =
@@ -118,6 +139,11 @@ ${evidenceCoverage.sources
 </table>
 
 <h2>2. Recalls</h2>
+<table>
+  <tr><th>Model query resolution</th><td><strong>${esc(recallQuery.status)}</strong> — ${esc(recallQuery.detail)}</td></tr>
+  <tr><th>Canonical query</th><td>${esc([recallQuery.canonical.modelYear, recallQuery.canonical.make, recallQuery.canonical.model].filter(Boolean).join(" ") || "UNRESOLVED")}</td></tr>
+  <tr><th>VIN-specific result</th><td><strong>${esc(vinRecallVerification.status)}</strong> — ${link(vinRecallVerification.sourceUrl, "open official NHTSA VIN check")}</td></tr>
+</table>
 ${
   recalls.length === 0
     ? "<p>No recalls found for the decoded make/model/year, or recall lookup could not be performed.</p>"
@@ -131,17 +157,27 @@ ${
   </table>`
 }
 
+<h2>2b. Government model context</h2>
+<div class="disclaimer">${esc(governmentContext.disclaimer)}</div>
+<table>
+  <tr><th>Complaints state</th><td>${esc(governmentContext.complaints.state)}</td></tr>
+  <tr><th>Model-level complaint count</th><td>${esc(governmentContext.complaints.totalCount ?? "UNKNOWN")}</td></tr>
+  <tr><th>Complaint indicators</th><td>${esc(`${governmentContext.complaints.crashCount} crash; ${governmentContext.complaints.fireCount} fire; ${governmentContext.complaints.injuryCount} injuries; ${governmentContext.complaints.deathCount} deaths`)}</td></tr>
+  <tr><th>Investigations</th><td>${link(governmentContext.investigations.sourceUrl, "official search")}</td></tr>
+  <tr><th>Manufacturer communications / TSBs</th><td>${link(governmentContext.manufacturerCommunications.sourceUrl, "official search")}</td></tr>
+</table>
+
 <h2>3. Public history signals — search pack</h2>
 <p><strong>SEARCH_LEADS_GENERATED</strong> (not SEARCH_COMPLETED). ${esc(searchPack.allItems.length)} lead(s). Privacy engines first; Google opt-in. No pages scraped.</p>
 <ul>
-${searchPack.allItems.map((i) => `<li><a href="${esc(i.url)}">${esc(i.label)}</a></li>`).join("\n")}
+${searchPack.allItems.map((i) => `<li>${link(i.url, i.label)}</li>`).join("\n")}
 </ul>
 
-<h2>3b. Saved findings (${findings.length})</h2>
+<h2>3b. Saved source observations (${findings.length})</h2>
 ${
   findings.length === 0
-    ? "<p>No user-confirmed findings.</p>"
-    : `<table><tr><th>Source</th><th>Date</th><th>Mileage</th><th>Title/Damage</th><th>Note</th><th>URL</th></tr>
+    ? "<p>No user-attested source observations.</p>"
+    : `<table><tr><th>Source</th><th>Date</th><th>Mileage</th><th>Title/Damage</th><th>Excerpt / note</th><th>Provenance</th><th>URL</th></tr>
   ${findings
     .map(
       (f) =>
@@ -149,10 +185,23 @@ ${
           f.mileage !== null ? esc(f.mileage) + " " + esc(f.mileageUnit) : ""
         }</td><td>${esc([f.titleStatus, f.damage].filter(Boolean).join(" / "))}</td><td>${esc(
           f.note
-        )}</td><td>${f.sourceUrl ? `<a href="${esc(f.sourceUrl)}">link</a>` : ""}</td></tr>`
+        )}${f.sourceExcerpt ? `<br><span class="meta">Excerpt: ${esc(f.sourceExcerpt)}</span>` : ""}</td><td>${esc(`${f.sourceOrigin ?? f.sourceLabel} · ${f.sourceRelationship}`)}</td><td>${link(f.sourceUrl)}</td></tr>`
     )
     .join("\n")}
   </table>`
+}
+
+<h2>3c. Imported paid-report observations (${paidReports.length})</h2>
+${
+  paidReports.length === 0
+    ? "<p>No user-obtained provider report was transcribed.</p>"
+    : `<table><tr><th>Provider</th><th>Type</th><th>Status</th><th>VIN match</th><th>Report date</th><th>Warning</th></tr>
+${paidReports
+  .map(
+    (item) =>
+      `<tr><td>${esc(item.provider)}</td><td>${esc(item.providerKind)}</td><td>${esc(item.status)}</td><td>${esc(item.vinMatches === null ? "NOT ESTABLISHED" : item.vinMatches ? "MATCH" : "MISMATCH")}</td><td>${esc(item.reportDate)}</td><td>${esc(item.warning)}</td></tr>`
+  )
+  .join("\n")}</table>`
 }
 
 <h2>4. Timeline</h2>
@@ -165,12 +214,25 @@ ${
       (t) =>
         `<tr><td>${esc(t.date)}</td><td>${esc(t.source)}</td><td>${esc(t.location)}</td><td>${
           t.mileage !== null ? esc(t.mileage) + " " + esc(t.mileageUnit) : ""
-        }</td><td>${esc(t.event)}</td><td>${t.evidenceUrl ? `<a href="${esc(t.evidenceUrl)}">link</a>` : ""}</td><td>${esc(
+        }</td><td>${esc(t.event)}</td><td>${link(t.evidenceUrl)}</td><td>${esc(
           t.confidence
         )}</td></tr>`
     )
     .join("\n")}
   </table>`
+}
+
+<h2>4b. Evidence corroboration</h2>
+${
+  evidenceClusters.length === 0
+    ? "<p>No event evidence was available to cluster.</p>"
+    : `<table><tr><th>Status</th><th>Date</th><th>Event</th><th>Summary</th><th>Records</th><th>Independent sources</th></tr>
+${evidenceClusters
+  .map(
+    (cluster) =>
+      `<tr><td>${esc(cluster.status)}</td><td>${esc(cluster.eventDate)}</td><td>${esc(cluster.eventType)}</td><td>${esc(cluster.summary)}</td><td>${esc(cluster.recordIndexes.map((index) => index + 1).join(", "))}</td><td>${esc(cluster.independentSourceCount)}</td></tr>`
+  )
+  .join("\n")}</table>`
 }
 
 <h2>5. Risk Flags</h2>
@@ -195,7 +257,7 @@ ${
     .map(
       (c) =>
         `<tr><td>${esc(c.claim)}</td><td>${esc(c.verdict)}</td><td>${esc(c.evidence)}</td><td>${
-          c.source ? `<a href="${esc(c.source)}">link</a>` : ""
+          link(c.source)
         }</td></tr>`
     )
     .join("\n")}
@@ -208,13 +270,13 @@ ${purchaseQuestions.map((q) => `<li>${esc(q)}</li>`).join("\n")}
 </ol>
 
 <h2>8. Raw Evidence Records</h2>
-<table><tr><th>Source</th><th>Type</th><th>Category</th><th>Confidence</th><th>URL</th><th>Excerpt</th></tr>
+<table><tr><th>Source</th><th>Type</th><th>Category</th><th>Confidence</th><th>Provenance</th><th>URL</th><th>Excerpt</th></tr>
 ${records
   .map(
     (r) =>
       `<tr><td>${esc(r.source)}</td><td>${esc(r.event_type)}</td><td>${esc(r.evidence_type)}</td><td>${esc(
         r.confidence
-      )}</td><td>${r.source_url ? `<a href="${esc(r.source_url)}">link</a>` : ""}</td><td>${esc(
+      )}</td><td>${esc(`${r.provenance.kind} · ${r.provenance.origin} · ${r.provenance.relationship}`)}</td><td>${link(r.source_url)}</td><td>${esc(
         (r.raw_excerpt ?? "").slice(0, 300)
       )}</td></tr>`
   )
@@ -225,6 +287,17 @@ ${records
 <ul>
 ${sourcesQueried.map((s) => `<li>${esc(s)}</li>`).join("\n")}
 </ul>
+
+<h2>Run Diagnostics</h2>
+<p class="meta">${esc(`${diagnostics.totalDurationMs} ms · ${diagnostics.retention}`)}</p>
+<table><tr><th>Adapter</th><th>State</th><th>Duration</th><th>Detail</th></tr>
+${diagnostics.adapters
+  .map(
+    (adapter) =>
+      `<tr><td>${esc(adapter.sourceId)}</td><td>${esc(adapter.state)}</td><td>${esc(adapter.durationMs)} ms</td><td>${esc(adapter.detail)}</td></tr>`
+  )
+  .join("\n")}
+</table>
 
 </body>
 </html>`;

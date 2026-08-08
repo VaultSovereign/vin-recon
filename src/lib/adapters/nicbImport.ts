@@ -42,6 +42,35 @@ export function nicbResultToRecords(vin: string, parsed: NicbParsedResult): Norm
   const retrievedAt = new Date().toISOString();
   const records: NormalizedRecord[] = [];
 
+  if (parsed.vin && parsed.vin !== vin) {
+    return [
+      {
+        vin,
+        source: "NICB VINCheck (user-supplied)",
+        source_url: NICB_URL,
+        retrieved_at: retrievedAt,
+        event_date: null,
+        event_type: "nicb_vin_mismatch",
+        mileage: null,
+        mileage_unit: null,
+        location: null,
+        title_status: null,
+        damage: null,
+        raw_excerpt: `Pasted NICB result identifies VIN ${parsed.vin}; expected ${vin}. Result details were excluded.`,
+        evidence_type: "UNKNOWN",
+        confidence: "LOW",
+        provenance: {
+          kind: "USER_SUPPLIED_CHECK",
+          origin: "NICB VINCheck",
+          independenceKey: "nicb-vincheck",
+          relationship: "ORIGINAL",
+          independentlyRetrieved: false,
+          note: "The supplied text appears to belong to a different VIN.",
+        },
+      },
+    ];
+  }
+
   if (parsed.titleBrandCheck) {
     records.push({
       vin,
@@ -56,8 +85,16 @@ export function nicbResultToRecords(vin: string, parsed: NicbParsedResult): Norm
       title_status: parsed.titleBrandCheck,
       damage: null,
       raw_excerpt: parsed.titleBrandCheck,
-      evidence_type: "FACT",
+      evidence_type: "OBSERVATION",
       confidence: "MEDIUM",
+      provenance: {
+        kind: "USER_SUPPLIED_CHECK",
+        origin: "NICB VINCheck",
+        independenceKey: "nicb-vincheck",
+        relationship: "ORIGINAL",
+        independentlyRetrieved: false,
+        note: "Text was supplied by the user after a manual CAPTCHA-protected check.",
+      },
     });
   }
 
@@ -75,8 +112,16 @@ export function nicbResultToRecords(vin: string, parsed: NicbParsedResult): Norm
       title_status: null,
       damage: null,
       raw_excerpt: parsed.theftCheck,
-      evidence_type: "FACT",
+      evidence_type: "OBSERVATION",
       confidence: "MEDIUM",
+      provenance: {
+        kind: "USER_SUPPLIED_CHECK",
+        origin: "NICB VINCheck",
+        independenceKey: "nicb-vincheck",
+        relationship: "ORIGINAL",
+        independentlyRetrieved: false,
+        note: "Text was supplied by the user after a manual CAPTCHA-protected check.",
+      },
     });
   }
 
@@ -96,6 +141,14 @@ export function nicbResultToRecords(vin: string, parsed: NicbParsedResult): Norm
       raw_excerpt: parsed.raw,
       evidence_type: "UNKNOWN",
       confidence: "LOW",
+      provenance: {
+        kind: "USER_SUPPLIED_CHECK",
+        origin: "NICB VINCheck",
+        independenceKey: "nicb-vincheck",
+        relationship: "ORIGINAL",
+        independentlyRetrieved: false,
+        note: "Text was supplied by the user but could not be parsed into an explicit result.",
+      },
     });
   }
 

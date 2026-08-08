@@ -1,5 +1,6 @@
 // Privacy-first VIN search pack: human-openable URLs only — never scrapes.
 // Used by the web app, reconstruct discovery, and the browser addon.
+import type { ResearchRegion } from "../types";
 
 export type SearchEngineId = "startpage" | "brave" | "duckduckgo" | "google";
 
@@ -8,7 +9,8 @@ export type SearchPackCategory =
   | "optional_google"
   | "auction"
   | "government"
-  | "market";
+  | "market"
+  | "regional_official";
 
 export interface SearchPackItem {
   id: string;
@@ -33,6 +35,9 @@ export interface SearchPack {
   governmentItems: SearchPackItem[];
   /** Regional classifieds-oriented queries. */
   marketItems: SearchPackItem[];
+  /** Official tools for explicitly selected regions; all remain human-operated. */
+  regionalItems: SearchPackItem[];
+  regions: ResearchRegion[];
   /** Flat list for coverage lead counts / export. */
   allItems: SearchPackItem[];
 }
@@ -70,8 +75,23 @@ export function buildEngineSearchUrl(engine: SearchEngineId, vin: string, extraQ
  * Build the full human research pack for a VIN.
  * Nothing is fetched — every URL is opened by a human (or the addon opens tabs).
  */
-export function buildSearchPack(vinRaw: string): SearchPack {
+function normalizeRegions(regions: ResearchRegion[]): ResearchRegion[] {
+  const allowed = new Set<ResearchRegion>(["US", "CA", "UK", "EU", "PL"]);
+  return [...new Set(["US" as ResearchRegion, ...regions.filter((region) => allowed.has(region))])];
+}
+
+function deduplicateItems(items: SearchPackItem[]): SearchPackItem[] {
+  const urls = new Set<string>();
+  return items.filter((item) => {
+    if (urls.has(item.url)) return false;
+    urls.add(item.url);
+    return true;
+  });
+}
+
+export function buildSearchPack(vinRaw: string, requestedRegions: ResearchRegion[] = ["US"]): SearchPack {
   const vin = vinRaw.trim().toUpperCase();
+  const regions = normalizeRegions(requestedRegions);
   const v = enc(vin);
   const phrase = encPhrase(vin);
 
@@ -102,6 +122,20 @@ export function buildSearchPack(vinRaw: string): SearchPack {
       url: buildEngineSearchUrl("startpage", vin, "(salvage OR flood OR auction OR Copart OR IAAI OR Bidfax)"),
       category: "privacy_web",
       description: "Adverse-signal oriented query.",
+    },
+    {
+      id: "sp-title",
+      label: "Startpage (VIN + title/brand/odometer)",
+      url: buildEngineSearchUrl("startpage", vin, "(title OR brand OR odometer OR mileage OR rollback)"),
+      category: "privacy_web",
+      description: "Title and mileage oriented query; results remain unverified leads.",
+    },
+    {
+      id: "brave-theft",
+      label: "Brave Search (VIN + stolen/theft/recovered)",
+      url: buildEngineSearchUrl("brave", vin, "(stolen OR theft OR recovered)"),
+      category: "privacy_web",
+      description: "Theft-oriented query; do not infer a result from search silence.",
     },
     {
       id: "brave-images",
@@ -176,32 +210,115 @@ export function buildSearchPack(vinRaw: string): SearchPack {
 
   const marketItems: SearchPackItem[] = [
     {
-      id: "sp-mobilede",
-      label: "Startpage: VIN + site:mobile.de",
-      url: buildEngineSearchUrl("startpage", vin, "site:mobile.de"),
+      id: "sp-us-market",
+      label: "Startpage: VIN + US classifieds",
+      url: buildEngineSearchUrl("startpage", vin, "(craigslist OR facebook marketplace OR cars.com OR autotrader)"),
       category: "market",
+      description: "US listing and dealer index query.",
     },
-    {
-      id: "sp-autoscout",
-      label: "Startpage: VIN + site:autoscout24.*",
-      url: buildEngineSearchUrl("startpage", vin, "site:autoscout24.de OR site:autoscout24.com"),
-      category: "market",
-    },
-    {
-      id: "sp-craigslist",
-      label: "Startpage: VIN + craigslist/facebook",
-      url: buildEngineSearchUrl("startpage", vin, "(craigslist OR facebook marketplace OR kleinanzeigen)"),
-      category: "market",
-    },
+    ...(regions.includes("CA")
+      ? [
+          {
+            id: "sp-ca-market",
+            label: "Startpage: VIN + Canadian classifieds",
+            url: buildEngineSearchUrl("startpage", vin, "(site:kijiji.ca OR site:autotrader.ca)"),
+            category: "market" as const,
+          },
+        ]
+      : []),
+    ...(regions.some((region) => region === "EU" || region === "PL")
+      ? [
+          {
+            id: "sp-mobilede",
+            label: "Startpage: VIN + site:mobile.de",
+            url: buildEngineSearchUrl("startpage", vin, "site:mobile.de"),
+            category: "market" as const,
+          },
+          {
+            id: "sp-autoscout",
+            label: "Startpage: VIN + AutoScout24",
+            url: buildEngineSearchUrl("startpage", vin, "site:autoscout24.de OR site:autoscout24.com"),
+            category: "market" as const,
+          },
+        ]
+      : []),
+    ...(regions.includes("UK")
+      ? [
+          {
+            id: "sp-uk-market",
+            label: "Startpage: VIN + UK classifieds",
+            url: buildEngineSearchUrl("startpage", vin, "(site:autotrader.co.uk OR site:ebay.co.uk/motors)"),
+            category: "market" as const,
+          },
+        ]
+      : []),
+    ...(regions.includes("PL")
+      ? [
+          {
+            id: "sp-pl-market",
+            label: "Startpage: VIN + Polish classifieds",
+            url: buildEngineSearchUrl("startpage", vin, "(site:otomoto.pl OR site:olx.pl)"),
+            category: "market" as const,
+          },
+        ]
+      : []),
   ];
 
-  const allItems = [
+  const regionalItems: SearchPackItem[] = [
+    ...(regions.includes("CA")
+      ? [
+          {
+            id: "ca-transport-recalls",
+            label: "Transport Canada recall database",
+            url: "https://recalls-rappels.canada.ca/en",
+            category: "regional_official" as const,
+            description: "Canadian model-level recall search; follow manufacturer VIN lookup where available.",
+          },
+        ]
+      : []),
+    ...(regions.includes("UK")
+      ? [
+          {
+            id: "uk-mot-history",
+            label: "GOV.UK MOT history",
+            url: "https://www.gov.uk/check-mot-history",
+            category: "regional_official" as const,
+            description: "Requires the registration number; VIN alone is not enough for the public form.",
+          },
+        ]
+      : []),
+    ...(regions.includes("EU")
+      ? [
+          {
+            id: "eu-safety-gate",
+            label: "EU Safety Gate",
+            url: "https://ec.europa.eu/safety-gate-alerts/screen/webReport",
+            category: "regional_official" as const,
+            description: "EU product/model recall context, not a VIN-specific history result.",
+          },
+        ]
+      : []),
+    ...(regions.includes("PL")
+      ? [
+          {
+            id: "pl-historia-pojazdu",
+            label: "Poland Historia Pojazdu",
+            url: "https://www.gov.pl/web/gov/sprawdz-historie-pojazdu",
+            category: "regional_official" as const,
+            description: "Requires VIN, registration number, and first-registration date.",
+          },
+        ]
+      : []),
+  ];
+
+  const allItems = deduplicateItems([
     ...privacyItems,
     ...googleItems,
     ...auctionItems,
     ...governmentItems,
     ...marketItems,
-  ];
+    ...regionalItems,
+  ]);
 
   return {
     vin,
@@ -211,6 +328,8 @@ export function buildSearchPack(vinRaw: string): SearchPack {
     auctionItems,
     governmentItems,
     marketItems,
+    regionalItems,
+    regions,
     allItems,
   };
 }

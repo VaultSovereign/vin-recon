@@ -12,11 +12,39 @@ import type { SearchPack } from "./engine/searchPack";
 //   riskLevel / riskFlags describe what adverse evidence was found.
 //   GREEN is only allowed when required automatic sources succeeded AND no adverse evidence exists.
 
-export type EvidenceCategory = "FACT" | "INFERENCE" | "SELLER_CLAIM" | "UNKNOWN";
+export type EvidenceCategory =
+  | "FACT"
+  | "OBSERVATION"
+  | "INFERENCE"
+  | "SELLER_CLAIM"
+  | "UNKNOWN";
 
 export type Confidence = "HIGH" | "MEDIUM" | "LOW";
 
 export type MileageUnit = "mi" | "km";
+
+/** How a record entered the report. This is separate from what the record says. */
+export type EvidenceProvenanceKind =
+  | "AUTOMATIC_PUBLIC_SOURCE"
+  | "USER_OBSERVED_SOURCE"
+  | "USER_SUPPLIED_CHECK"
+  | "USER_IMPORTED_REPORT"
+  | "GENERATED_LEAD"
+  | "DERIVED";
+
+export type SourceRelationship = "ORIGINAL" | "SYNDICATED" | "UNKNOWN";
+
+export interface EvidenceProvenance {
+  kind: EvidenceProvenanceKind;
+  /** Publisher, public system, or underlying origin named by the investigator. */
+  origin: string;
+  /** Used for conservative independent-source counting. */
+  independenceKey: string;
+  relationship: SourceRelationship;
+  /** True only when VIN Recon itself retrieved the public source response. */
+  independentlyRetrieved: boolean;
+  note: string | null;
+}
 
 /** Core normalized record, one per piece of evidence retrieved from a source. */
 export interface NormalizedRecord {
@@ -34,6 +62,7 @@ export interface NormalizedRecord {
   raw_excerpt: string | null;
   evidence_type: EvidenceCategory;
   confidence: Confidence;
+  provenance: EvidenceProvenance;
 }
 
 export interface VinCheckDigitResult {
@@ -84,6 +113,44 @@ export interface Recall {
   sourceUrl: string;
 }
 
+export type CanonicalizationStatus = "EXACT" | "NORMALIZED" | "UNRESOLVED" | "NOT_RUN";
+
+export interface RecallQueryResolution {
+  status: CanonicalizationStatus;
+  requested: {
+    make: string | null;
+    model: string | null;
+    modelYear: string | null;
+  };
+  canonical: {
+    make: string | null;
+    model: string | null;
+    modelYear: string | null;
+  };
+  detail: string;
+  sourceUrls: string[];
+}
+
+export type VinRecallVerificationStatus =
+  | "NOT_CHECKED"
+  | "NO_OPEN_RECALLS_OBSERVED"
+  | "OPEN_RECALLS_OBSERVED"
+  | "RESULT_UNAVAILABLE";
+
+export interface VinRecallVerificationInput {
+  status?: VinRecallVerificationStatus;
+  checkedAt?: string | null;
+  note?: string;
+}
+
+export interface VinRecallVerification {
+  status: VinRecallVerificationStatus;
+  sourceUrl: string;
+  checkedAt: string | null;
+  note: string | null;
+  evidenceRecordIndex: number | null;
+}
+
 export interface TimelineEntry {
   date: string | null;
   source: string;
@@ -93,6 +160,7 @@ export interface TimelineEntry {
   event: string;
   evidenceUrl: string | null;
   confidence: Confidence;
+  recordIndex: number;
 }
 
 export type RiskFlagLevel = "GREEN" | "AMBER" | "RED";
@@ -103,6 +171,19 @@ export interface RiskFlag {
   title: string;
   detail: string;
   supportingRecordIndexes: number[];
+}
+
+export type CorroborationStatus = "SINGLE_SOURCE" | "CORROBORATED" | "DUPLICATE_ONLY";
+
+export interface EvidenceCluster {
+  id: string;
+  eventType: string;
+  eventDate: string | null;
+  summary: string;
+  recordIndexes: number[];
+  independentSourceCount: number;
+  independenceKeys: string[];
+  status: CorroborationStatus;
 }
 
 export type ClaimVerdict = "SUPPORTED" | "CONTRADICTED" | "NOT_ESTABLISHED";
@@ -163,8 +244,8 @@ export interface NicbParsedResult {
 }
 
 /**
- * Human-confirmed research finding (from web UI or browser addon).
- * Becomes a FACT NormalizedRecord — only after the user saves it.
+ * Human-attested source observation (from web UI or browser addon).
+ * Becomes an OBSERVATION record with explicit retrieval and independence provenance.
  */
 export interface UserFindingInput {
   id?: string;
@@ -180,6 +261,12 @@ export interface UserFindingInput {
   confidence?: Confidence;
   savedAt?: string;
   pageTitle?: string | null;
+  /** Exact excerpt observed at the source, kept distinct from the investigator note. */
+  sourceExcerpt?: string | null;
+  /** Underlying publisher/original source when the page is a mirror or syndication. */
+  sourceOrigin?: string | null;
+  sourceRelationship?: SourceRelationship;
+  eventType?: string | null;
 }
 
 export interface UserFinding {
@@ -197,14 +284,114 @@ export interface UserFinding {
   confidence: Confidence;
   savedAt: string;
   pageTitle: string | null;
+  sourceExcerpt: string | null;
+  sourceOrigin: string | null;
+  sourceRelationship: SourceRelationship;
+  eventType: string;
+}
+
+export type PaidReportProviderKind = "NMVTIS_APPROVED" | "CARFAX" | "AUTOCHECK" | "OTHER";
+
+/** Structured transcription of a report the user obtained independently. */
+export interface PaidReportInput {
+  id?: string;
+  provider?: string;
+  providerKind?: PaidReportProviderKind;
+  sourceUrl?: string | null;
+  reportDate?: string | null;
+  purchasedAt?: string | null;
+  rawText?: string;
+  sourceExcerpt?: string | null;
+  titleStatus?: string | null;
+  damage?: string | null;
+  mileage?: number | string | null;
+  mileageUnit?: MileageUnit | null;
+  location?: string | null;
+  eventDate?: string | null;
+}
+
+export type PaidReportImportStatus = "IMPORTED" | "PARTIAL" | "VIN_MISMATCH" | "NOT_PROVIDED";
+
+export interface PaidReportImportResult {
+  id: string;
+  provider: string;
+  providerKind: PaidReportProviderKind;
+  sourceUrl: string | null;
+  reportDate: string | null;
+  purchasedAt: string | null;
+  status: PaidReportImportStatus;
+  detectedVin: string | null;
+  vinMatches: boolean | null;
+  recordIndexes: number[];
+  warning: string | null;
+}
+
+export type ResearchRegion = "US" | "CA" | "UK" | "EU" | "PL";
+
+export interface NhtsaComplaint {
+  odiNumber: string;
+  components: string;
+  summary: string;
+  dateOfIncident: string | null;
+  dateComplaintFiled: string | null;
+  crash: boolean;
+  fire: boolean;
+  numberOfInjuries: number;
+  numberOfDeaths: number;
+}
+
+export interface ModelContextLead {
+  label: string;
+  state: SourceCoverageState;
+  sourceUrl: string;
+  detail: string;
+}
+
+export interface GovernmentContext {
+  scope: "MODEL_LEVEL";
+  vehicle: { make: string | null; model: string | null; modelYear: string | null };
+  disclaimer: string;
+  complaints: {
+    state: SourceCoverageState;
+    sourceUrl: string;
+    totalCount: number | null;
+    returnedCount: number;
+    crashCount: number;
+    fireCount: number;
+    injuryCount: number;
+    deathCount: number;
+    topComponents: { component: string; count: number }[];
+    recent: NhtsaComplaint[];
+    error: string | null;
+  };
+  investigations: ModelContextLead;
+  manufacturerCommunications: ModelContextLead;
+}
+
+export interface AdapterDiagnostic {
+  sourceId: string;
+  state: SourceCoverageState;
+  durationMs: number;
+  detail: string | null;
+}
+
+export interface ReconstructionDiagnostics {
+  startedAt: string;
+  completedAt: string;
+  totalDurationMs: number;
+  adapters: AdapterDiagnostic[];
+  retention: "NOT_STORED_SERVER_SIDE";
 }
 
 export interface ReconstructRequest {
   vin: string;
   nicbRawText?: string;
   sellerClaims?: string[];
-  /** User-confirmed findings from manual research / browser addon. */
+  /** User-attested source observations from manual research / browser addon. */
   findings?: UserFindingInput[];
+  paidReports?: PaidReportInput[];
+  vinRecallVerification?: VinRecallVerificationInput;
+  researchRegions?: ResearchRegion[];
 }
 
 export interface ReconstructResponse {
@@ -215,8 +402,11 @@ export interface ReconstructResponse {
   riskLevel: RiskFlagLevel;
   evidenceCoverage: EvidenceCoverage;
   recalls: Recall[];
+  recallQuery: RecallQueryResolution;
+  vinRecallVerification: VinRecallVerification;
   records: NormalizedRecord[];
   timeline: TimelineEntry[];
+  evidenceClusters: EvidenceCluster[];
   riskFlags: RiskFlag[];
   claimResults: SellerClaimResult[];
   purchaseQuestions: string[];
@@ -224,6 +414,10 @@ export interface ReconstructResponse {
   parserVersion: string;
   /** Echo of normalized user findings included in this reconstruction. */
   findings: UserFinding[];
+  paidReports: PaidReportImportResult[];
   /** Privacy-first search pack (human-openable URLs; nothing scraped). */
   searchPack: SearchPack;
+  researchRegions: ResearchRegion[];
+  governmentContext: GovernmentContext;
+  diagnostics: ReconstructionDiagnostics;
 }

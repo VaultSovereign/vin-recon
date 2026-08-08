@@ -11,19 +11,40 @@
     reconOut: document.getElementById("reconOut"),
     fSource: document.getElementById("fSource"),
     fUrl: document.getElementById("fUrl"),
+    fOrigin: document.getElementById("fOrigin"),
+    fRelationship: document.getElementById("fRelationship"),
+    fEventType: document.getElementById("fEventType"),
+    fTitle: document.getElementById("fTitle"),
     fDamage: document.getElementById("fDamage"),
     fMileage: document.getElementById("fMileage"),
+    fMileageUnit: document.getElementById("fMileageUnit"),
+    fLocation: document.getElementById("fLocation"),
     fDate: document.getElementById("fDate"),
+    fExcerpt: document.getElementById("fExcerpt"),
     fNote: document.getElementById("fNote"),
   };
 
   let pageMeta = { pageUrl: "", pageTitle: "" };
 
+  function safeHttpUrl(value) {
+    if (!value || !String(value).trim()) return null;
+    try {
+      const url = new URL(String(value).trim());
+      return url.protocol === "http:" || url.protocol === "https:" ? url.toString().slice(0, 2000) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function safeAppBaseUrl(value) {
+    return safeHttpUrl(value)?.replace(/\/$/, "") || "http://localhost:3000";
+  }
+
   async function getSettings() {
     const data = await chrome.storage.local.get(STORAGE_SETTINGS);
     const s = data[STORAGE_SETTINGS] || {};
     return {
-      appBaseUrl: (s.appBaseUrl || "http://localhost:3000").replace(/\/$/, ""),
+      appBaseUrl: safeAppBaseUrl(s.appBaseUrl),
     };
   }
 
@@ -69,15 +90,29 @@
     els.findingsList.innerHTML = "";
     if (list.length === 0) {
       const li = document.createElement("li");
-      li.textContent = "No saved findings for this VIN yet.";
+      li.textContent = "No saved source observations for this VIN yet.";
       els.findingsList.appendChild(li);
       return;
     }
     for (const f of list) {
       const li = document.createElement("li");
-      li.innerHTML = `<strong>${escapeHtml(f.sourceLabel || "Finding")}</strong> ${
-        f.sourceUrl ? `— <a href="${escapeAttr(f.sourceUrl)}" target="_blank">link</a>` : ""
-      }<div class="hint">${escapeHtml((f.note || f.damage || "").slice(0, 120))}</div>`;
+      const label = document.createElement("strong");
+      label.textContent = f.sourceLabel || "Observation";
+      li.appendChild(label);
+      const sourceUrl = safeHttpUrl(f.sourceUrl);
+      if (sourceUrl) {
+        li.appendChild(document.createTextNode(" — "));
+        const link = document.createElement("a");
+        link.href = sourceUrl;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "link";
+        li.appendChild(link);
+      }
+      const hint = document.createElement("div");
+      hint.className = "hint";
+      hint.textContent = (f.sourceExcerpt || f.note || f.damage || "").slice(0, 120);
+      li.appendChild(hint);
       const rm = document.createElement("button");
       rm.type = "button";
       rm.textContent = "Remove";
@@ -93,23 +128,13 @@
     }
   }
 
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-  }
-  function escapeAttr(s) {
-    return escapeHtml(s).replace(/"/g, "&quot;");
-  }
-
   async function detectOnActiveTab() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) {
       setVinOptions([]);
       return;
     }
-    // Prefer page URL as default source for findings.
+    // Prefer page URL as the default source for observations.
     els.fUrl.value = tab.url || "";
     pageMeta = { pageUrl: tab.url || "", pageTitle: tab.title || "" };
 
@@ -173,7 +198,7 @@
       return;
     }
     const { appBaseUrl } = await getSettings();
-    // Sync findings into a query-less open; findings stay in extension storage + app localStorage via reconstruct API.
+    // Observations stay in extension storage and are sent only when the user reconstructs through the API.
     chrome.tabs.create({ url: `${appBaseUrl}/?vin=${encodeURIComponent(vin)}` });
   });
 
@@ -183,32 +208,41 @@
       alert("Enter a well-formed 17-character VIN first.");
       return;
     }
+    const sourceExcerpt = els.fExcerpt.value.trim();
     const note = els.fNote.value.trim();
     const damage = els.fDamage.value.trim();
     const url = els.fUrl.value.trim();
-    if (!note && !damage && !url) {
-      alert("Add a note, damage text, or URL.");
+    if (!sourceExcerpt && !note && !damage && !url) {
+      alert("Add an exact source excerpt, note, damage text, or URL.");
       return;
     }
+    const sourceUrl = safeHttpUrl(url || pageMeta.pageUrl);
     const finding = {
       id: `addon-${Date.now()}`,
       sourceLabel: els.fSource.value.trim() || "Web research",
-      sourceUrl: url || pageMeta.pageUrl || null,
+      sourceUrl,
       note,
+      sourceExcerpt: sourceExcerpt || null,
+      sourceOrigin: els.fOrigin.value.trim() || null,
+      sourceRelationship: els.fRelationship.value,
+      eventType: els.fEventType.value,
       damage: damage || null,
-      titleStatus: null,
+      titleStatus: els.fTitle.value.trim() || null,
       mileage: els.fMileage.value ? parseInt(els.fMileage.value, 10) : null,
-      mileageUnit: els.fMileage.value ? "km" : null,
+      mileageUnit: els.fMileage.value ? els.fMileageUnit.value : null,
+      location: els.fLocation.value.trim() || null,
       eventDate: els.fDate.value.trim() || null,
       savedAt: new Date().toISOString(),
       pageTitle: pageMeta.pageTitle || null,
-      confidence: url || pageMeta.pageUrl ? "MEDIUM" : "LOW",
+      confidence: sourceUrl ? "MEDIUM" : "LOW",
     };
     const all = await getAllFindings();
     all[vin] = [...(all[vin] || []), finding];
     await setAllFindings(all);
     els.fNote.value = "";
+    els.fExcerpt.value = "";
     els.fDamage.value = "";
+    els.fTitle.value = "";
     els.fMileage.value = "";
     els.fDate.value = "";
     await renderFindings();
@@ -241,7 +275,7 @@
         riskLevel: data.riskLevel,
         completeness: data.evidenceCoverage?.completeness,
         greenEligible: data.evidenceCoverage?.greenEligible,
-        findings: data.findings?.length ?? 0,
+        sourceObservations: data.findings?.length ?? 0,
         identityStatus: data.identity?.identityStatus,
         flags: (data.riskFlags || []).map((f) => `${f.level}: ${f.title}`),
       };

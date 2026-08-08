@@ -1,6 +1,7 @@
 // Adapter: NHTSA recalls API (public, free, no key required).
 // https://www.nhtsa.gov/nhtsa-datasets-and-apis#recalls
-import { NormalizedRecord, Recall } from "../types";
+import { NormalizedRecord, Recall, RecallQueryResolution, SourceCoverageState } from "../types";
+import { resolveRecallQueryIdentity } from "./nhtsaProductCatalog";
 
 const RECALLS_BY_VIN = "https://api.nhtsa.gov/recalls/recallsByVehicle";
 
@@ -13,6 +14,10 @@ interface NhtsaRecallResult {
 }
 
 interface NhtsaRecallResponse {
+  Count?: number;
+  count?: number;
+  Message?: string;
+  message?: string;
   results?: NhtsaRecallResult[];
 }
 
@@ -21,6 +26,43 @@ export interface RecallLookupOutcome {
   record: NormalizedRecord;
   sourceUrl: string;
   error: string | null;
+  state: SourceCoverageState;
+  query: RecallQueryResolution;
+}
+
+function recallRecord(
+  vin: string,
+  sourceUrl: string,
+  retrievedAt: string,
+  eventType: string,
+  excerpt: string,
+  evidenceType: NormalizedRecord["evidence_type"],
+  confidence: NormalizedRecord["confidence"]
+): NormalizedRecord {
+  return {
+    vin,
+    source: "NHTSA Recalls",
+    source_url: sourceUrl,
+    retrieved_at: retrievedAt,
+    event_date: null,
+    event_type: eventType,
+    mileage: null,
+    mileage_unit: null,
+    location: null,
+    title_status: null,
+    damage: null,
+    raw_excerpt: excerpt,
+    evidence_type: evidenceType,
+    confidence,
+    provenance: {
+      kind: "AUTOMATIC_PUBLIC_SOURCE",
+      origin: "NHTSA Recalls",
+      independenceKey: "nhtsa-recalls",
+      relationship: "ORIGINAL",
+      independentlyRetrieved: true,
+      note: null,
+    },
+  };
 }
 
 /**
@@ -34,62 +76,58 @@ export async function fetchRecallsForVehicle(
   modelYear: string | null
 ): Promise<RecallLookupOutcome> {
   const retrievedAt = new Date().toISOString();
+  const query = await resolveRecallQueryIdentity(make, model, modelYear);
 
   if (!make || !model || !modelYear) {
     const sourceUrl = RECALLS_BY_VIN;
     return {
       recalls: [],
-      record: {
+      record: recallRecord(
         vin,
-        source: "NHTSA Recalls",
-        source_url: sourceUrl,
-        retrieved_at: retrievedAt,
-        event_date: null,
-        event_type: "recalls_skipped",
-        mileage: null,
-        mileage_unit: null,
-        location: null,
-        title_status: null,
-        damage: null,
-        raw_excerpt: "Insufficient make/model/year decoded from VIN to query recalls.",
-        evidence_type: "UNKNOWN",
-        confidence: "LOW",
-      },
+        sourceUrl,
+        retrievedAt,
+        "recalls_skipped",
+        "Insufficient make/model/year decoded from VIN to query recalls.",
+        "UNKNOWN",
+        "LOW"
+      ),
       sourceUrl,
       error: "Insufficient decoded vehicle data to query NHTSA recalls.",
+      state: "NOT_RUN",
+      query,
     };
   }
 
-  const params = new URLSearchParams({ make, model, modelYear });
+  const queryMake = query.canonical.make ?? make;
+  const queryModel = query.canonical.model ?? model;
+  const queryYear = query.canonical.modelYear ?? modelYear;
+  const params = new URLSearchParams({ make: queryMake, model: queryModel, modelYear: queryYear });
   const sourceUrl = `${RECALLS_BY_VIN}?${params.toString()}`;
 
   try {
     const res = await fetch(sourceUrl, { signal: AbortSignal.timeout(15000) });
-    if (!res.ok) {
+    const text = await res.text();
+    let data: NhtsaRecallResponse | null = null;
+    try {
+      data = JSON.parse(text) as NhtsaRecallResponse;
+    } catch {
+      // handled as an unreadable response below
+    }
+
+    if (!data || !Array.isArray(data.results)) {
+      const error = res.ok
+        ? "NHTSA Recalls returned an unreadable response."
+        : `NHTSA Recalls responded with HTTP ${res.status}.`;
       return {
         recalls: [],
-        record: {
-          vin,
-          source: "NHTSA Recalls",
-          source_url: sourceUrl,
-          retrieved_at: retrievedAt,
-          event_date: null,
-          event_type: "recalls_error",
-          mileage: null,
-          mileage_unit: null,
-          location: null,
-          title_status: null,
-          damage: null,
-          raw_excerpt: `HTTP ${res.status}`,
-          evidence_type: "UNKNOWN",
-          confidence: "LOW",
-        },
+        record: recallRecord(vin, sourceUrl, retrievedAt, "recalls_error", text.slice(0, 1000), "UNKNOWN", "LOW"),
         sourceUrl,
-        error: `NHTSA Recalls responded with HTTP ${res.status}`,
+        error,
+        state: "FAILED",
+        query,
       };
     }
 
-    const data = (await res.json()) as NhtsaRecallResponse;
     const results = data.results ?? [];
 
     const recalls: Recall[] = results.map((r) => ({
@@ -100,46 +138,37 @@ export async function fetchRecallsForVehicle(
       sourceUrl,
     }));
 
-    const record: NormalizedRecord = {
+    const queryUnresolved = query.status === "UNRESOLVED";
+    const httpAmbiguous = !res.ok;
+    const state: SourceCoverageState = httpAmbiguous || queryUnresolved ? "PARTIAL" : "SUCCESS";
+    const responseMessage = data.Message ?? data.message ?? "";
+    const partialReasons = [
+      httpAmbiguous ? `HTTP ${res.status} despite a readable response (${responseMessage || "no response message"})` : null,
+      queryUnresolved ? query.detail : null,
+    ].filter(Boolean);
+    const error = partialReasons.length > 0 ? `Recall result is ambiguous: ${partialReasons.join("; ")}.` : null;
+    const record = recallRecord(
       vin,
-      source: "NHTSA Recalls",
-      source_url: sourceUrl,
-      retrieved_at: retrievedAt,
-      event_date: null,
-      event_type: "recalls_lookup",
-      mileage: null,
-      mileage_unit: null,
-      location: null,
-      title_status: null,
-      damage: null,
-      raw_excerpt: `${recalls.length} recall(s) found for ${modelYear} ${make} ${model}.`,
-      evidence_type: "FACT",
-      confidence: "HIGH",
-    };
+      sourceUrl,
+      retrievedAt,
+      state === "SUCCESS" ? "recalls_lookup" : "recalls_partial",
+      `${recalls.length} recall campaign(s) returned for model-level query ${queryYear} ${queryMake} ${queryModel}. ${
+        error ?? query.detail
+      }`,
+      state === "SUCCESS" ? "FACT" : "OBSERVATION",
+      state === "SUCCESS" ? "HIGH" : "MEDIUM"
+    );
 
-    return { recalls, record, sourceUrl, error: null };
+    return { recalls, record, sourceUrl, error, state, query };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return {
       recalls: [],
-      record: {
-        vin,
-        source: "NHTSA Recalls",
-        source_url: sourceUrl,
-        retrieved_at: retrievedAt,
-        event_date: null,
-        event_type: "recalls_error",
-        mileage: null,
-        mileage_unit: null,
-        location: null,
-        title_status: null,
-        damage: null,
-        raw_excerpt: message,
-        evidence_type: "UNKNOWN",
-        confidence: "LOW",
-      },
+      record: recallRecord(vin, sourceUrl, retrievedAt, "recalls_error", message, "UNKNOWN", "LOW"),
       sourceUrl,
       error: `Failed to reach NHTSA Recalls: ${message}`,
+      state: "FAILED",
+      query,
     };
   }
 }

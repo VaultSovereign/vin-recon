@@ -1,5 +1,5 @@
-// Convert human-confirmed research findings into NormalizedRecord rows.
-// Findings are never invented by the engine — only what the user saved.
+// Convert investigator-recorded source observations into NormalizedRecord rows.
+// Observations are never invented by the engine — only what the user saved.
 import {
   Confidence,
   MileageUnit,
@@ -12,6 +12,37 @@ import { isWellFormedVin } from "../vinCheckDigit";
 const MAX_FINDINGS = 50;
 const MAX_NOTE_LEN = 4000;
 
+function normalizeHttpUrl(value: string | null | undefined): string | null {
+  if (!value?.trim()) return null;
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return url.toString().slice(0, 2000);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeDate(value: string | null | undefined): string | null {
+  if (!value?.trim()) return null;
+  const candidate = value.trim().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(candidate) && !Number.isNaN(Date.parse(`${candidate}T00:00:00Z`))
+    ? candidate
+    : null;
+}
+
+function independenceKey(sourceUrl: string | null, sourceOrigin: string | null, sourceLabel: string): string {
+  if (sourceOrigin) return `origin:${sourceOrigin.toLowerCase().replace(/\s+/g, "-")}`;
+  if (sourceUrl) {
+    try {
+      return `host:${new URL(sourceUrl).hostname.toLowerCase().replace(/^www\./, "")}`;
+    } catch {
+      // URL was already normalized; retain a conservative label fallback.
+    }
+  }
+  return `label:${sourceLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+}
+
 export function normalizeUserFindingInput(
   vin: string,
   input: UserFindingInput,
@@ -20,11 +51,24 @@ export function normalizeUserFindingInput(
   const v = vin.trim().toUpperCase();
   const sourceLabel = (input.sourceLabel ?? "User research").trim().slice(0, 200) || "User research";
   const note = (input.note ?? "").trim().slice(0, MAX_NOTE_LEN);
-  const sourceUrl = input.sourceUrl?.trim() ? input.sourceUrl.trim().slice(0, 2000) : null;
-  const eventDate = input.eventDate?.trim() ? input.eventDate.trim().slice(0, 32) : null;
+  const sourceUrl = normalizeHttpUrl(input.sourceUrl);
+  const eventDate = normalizeDate(input.eventDate);
   const location = input.location?.trim() ? input.location.trim().slice(0, 200) : null;
   const titleStatus = input.titleStatus?.trim() ? input.titleStatus.trim().slice(0, 200) : null;
   const damage = input.damage?.trim() ? input.damage.trim().slice(0, 500) : null;
+  const sourceExcerpt = input.sourceExcerpt?.trim()
+    ? input.sourceExcerpt.trim().slice(0, MAX_NOTE_LEN)
+    : null;
+  const sourceOrigin = input.sourceOrigin?.trim() ? input.sourceOrigin.trim().slice(0, 200) : null;
+  const sourceRelationship =
+    input.sourceRelationship === "ORIGINAL" ||
+    input.sourceRelationship === "SYNDICATED" ||
+    input.sourceRelationship === "UNKNOWN"
+      ? input.sourceRelationship
+      : "UNKNOWN";
+  const eventType =
+    input.eventType?.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "_").slice(0, 80) ||
+    "user_observed_source";
 
   let mileage: number | null = null;
   if (input.mileage !== undefined && input.mileage !== null && input.mileage !== "") {
@@ -56,6 +100,10 @@ export function normalizeUserFindingInput(
     confidence,
     savedAt: input.savedAt?.trim() || new Date().toISOString(),
     pageTitle: input.pageTitle?.trim()?.slice(0, 300) || null,
+    sourceExcerpt,
+    sourceOrigin,
+    sourceRelationship,
+    eventType,
   };
 }
 
@@ -66,10 +114,11 @@ export function parseUserFindings(vin: string, raw: unknown): UserFinding[] {
     .map((item, i) => normalizeUserFindingInput(vin, (item ?? {}) as UserFindingInput, i));
 }
 
-/** Map a confirmed finding to a FACT record (user attested they saw this evidence). */
+/** Map an investigator-attested source observation without promoting it to an automatic FACT. */
 export function findingToNormalizedRecord(finding: UserFinding): NormalizedRecord {
   const excerptParts = [
-    finding.note || null,
+    finding.sourceExcerpt ? `Source excerpt: ${finding.sourceExcerpt}` : null,
+    finding.note ? `Investigator note: ${finding.note}` : null,
     finding.pageTitle ? `Page: ${finding.pageTitle}` : null,
     finding.titleStatus ? `Title: ${finding.titleStatus}` : null,
     finding.damage ? `Damage: ${finding.damage}` : null,
@@ -77,19 +126,27 @@ export function findingToNormalizedRecord(finding: UserFinding): NormalizedRecor
 
   return {
     vin: finding.vin,
-    source: `User finding: ${finding.sourceLabel}`,
+    source: `User observation: ${finding.sourceLabel}`,
     source_url: finding.sourceUrl,
     retrieved_at: finding.savedAt,
     event_date: finding.eventDate,
-    event_type: "user_confirmed_finding",
+    event_type: finding.eventType,
     mileage: finding.mileage,
     mileage_unit: finding.mileageUnit,
     location: finding.location,
     title_status: finding.titleStatus,
     damage: finding.damage,
-    raw_excerpt: excerptParts.join(" | ") || "User-confirmed research finding (no note).",
-    evidence_type: "FACT",
+    raw_excerpt: excerptParts.join(" | ") || "User-recorded source observation (no note).",
+    evidence_type: "OBSERVATION",
     confidence: finding.confidence,
+    provenance: {
+      kind: "USER_OBSERVED_SOURCE",
+      origin: finding.sourceOrigin ?? finding.sourceLabel,
+      independenceKey: independenceKey(finding.sourceUrl, finding.sourceOrigin, finding.sourceLabel),
+      relationship: finding.sourceRelationship,
+      independentlyRetrieved: false,
+      note: "The investigator attested that the source displayed this information; VIN Recon did not retrieve it.",
+    },
   };
 }
 

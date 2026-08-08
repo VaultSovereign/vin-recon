@@ -9,7 +9,15 @@
   input.value = s.appBaseUrl || "http://localhost:3000";
 
   document.getElementById("save").addEventListener("click", async () => {
-    const appBaseUrl = input.value.trim().replace(/\/$/, "") || "http://localhost:3000";
+    let appBaseUrl;
+    try {
+      const candidate = new URL(input.value.trim() || "http://localhost:3000");
+      if (candidate.protocol !== "http:" && candidate.protocol !== "https:") throw new Error("Unsupported protocol");
+      appBaseUrl = candidate.toString().replace(/\/$/, "");
+    } catch {
+      status.textContent = "Enter a valid http:// or https:// URL.";
+      return;
+    }
     await chrome.storage.local.set({ [STORAGE_SETTINGS]: { appBaseUrl } });
     status.textContent = "Saved.";
   });

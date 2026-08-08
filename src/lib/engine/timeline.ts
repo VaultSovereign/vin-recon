@@ -4,9 +4,11 @@
 import { NormalizedRecord, TimelineEntry } from "../types";
 
 export function buildTimeline(records: NormalizedRecord[]): TimelineEntry[] {
-  const dated = records.filter((r) => r.event_date !== null);
+  const dated = records
+    .map((record, recordIndex) => ({ record, recordIndex }))
+    .filter(({ record }) => record.event_date !== null);
 
-  const entries: TimelineEntry[] = dated.map((r) => ({
+  const entries: TimelineEntry[] = dated.map(({ record: r, recordIndex }) => ({
     date: r.event_date,
     source: r.source,
     location: r.location,
@@ -15,6 +17,7 @@ export function buildTimeline(records: NormalizedRecord[]): TimelineEntry[] {
     event: r.event_type,
     evidenceUrl: r.source_url,
     confidence: r.confidence,
+    recordIndex,
   }));
 
   return entries.sort((a, b) => {

@@ -7,8 +7,21 @@ interface ClaimRule {
   check: (records: NormalizedRecord[]) => Omit<SellerClaimResult, "claim">;
 }
 
+const NEGATION = /\b(no|not|never|without|none|free of|not reported|no record of)\b/i;
+
 function findRecord(records: NormalizedRecord[], pattern: RegExp): NormalizedRecord | undefined {
-  return records.find((r) => pattern.test([r.raw_excerpt, r.title_status, r.damage].filter(Boolean).join(" ")));
+  return records.find((record) => {
+    if (record.damage && pattern.test(record.damage) && !NEGATION.test(record.damage)) return true;
+    if (record.title_status && pattern.test(record.title_status) && !NEGATION.test(record.title_status)) return true;
+    return (record.raw_excerpt ?? "")
+      .split(/[\n.;|]/)
+      .some((segment) => pattern.test(segment) && !NEGATION.test(segment));
+  });
+}
+
+function mileageKm(record: NormalizedRecord): number | null {
+  if (record.mileage === null || record.mileage_unit === null) return null;
+  return record.mileage_unit === "mi" ? record.mileage * 1.609344 : record.mileage;
 }
 
 const CLAIM_RULES: ClaimRule[] = [
@@ -41,7 +54,9 @@ const CLAIM_RULES: ClaimRule[] = [
   {
     match: /original mileage/i,
     check: (records) => {
-      const mileageRecords = records.filter((r) => r.mileage !== null);
+      const mileageRecords = records
+        .filter((record) => record.mileage !== null && record.mileage_unit !== null && record.event_date !== null)
+        .sort((left, right) => left.event_date!.localeCompare(right.event_date!));
       if (mileageRecords.length < 2) {
         return {
           verdict: "NOT_ESTABLISHED",
@@ -49,7 +64,12 @@ const CLAIM_RULES: ClaimRule[] = [
           source: null,
         };
       }
-      const decreasing = mileageRecords.some((r, i) => i > 0 && r.mileage! < mileageRecords[i - 1].mileage!);
+      const decreasing = mileageRecords.some((record, index) => {
+        if (index === 0) return false;
+        const current = mileageKm(record);
+        const previous = mileageKm(mileageRecords[index - 1]);
+        return current !== null && previous !== null && current + 5 < previous;
+      });
       if (decreasing) {
         return {
           verdict: "CONTRADICTED",

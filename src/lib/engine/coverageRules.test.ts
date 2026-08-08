@@ -37,6 +37,14 @@ function baseRecord(over: Partial<NormalizedRecord> = {}): NormalizedRecord {
     raw_excerpt: null,
     evidence_type: "FACT",
     confidence: "HIGH",
+    provenance: {
+      kind: "AUTOMATIC_PUBLIC_SOURCE",
+      origin: "test",
+      independenceKey: "test",
+      relationship: "ORIGINAL",
+      independentlyRetrieved: true,
+      note: null,
+    },
     ...over,
   };
 }

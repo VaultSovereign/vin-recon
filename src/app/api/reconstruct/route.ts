@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { reconstruct } from "@/lib/engine/reconstruct";
 import { ReconstructRequest } from "@/lib/types";
 
-/** CORS so the local browser addon can POST findings from chrome-extension:// */
+/** CORS so the local browser addon can POST source observations from chrome-extension:// */
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -14,13 +14,17 @@ export async function OPTIONS() {
 }
 
 export async function POST(req: NextRequest) {
-  let body: ReconstructRequest;
+  let parsed: unknown;
   try {
-    body = await req.json();
+    parsed = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400, headers: CORS_HEADERS });
   }
 
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return NextResponse.json({ error: "JSON body must be an object." }, { status: 400, headers: CORS_HEADERS });
+  }
+  const body = parsed as ReconstructRequest;
   if (!body.vin || typeof body.vin !== "string") {
     return NextResponse.json({ error: "A 'vin' string field is required." }, { status: 400, headers: CORS_HEADERS });
   }

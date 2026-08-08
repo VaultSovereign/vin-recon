@@ -11,12 +11,25 @@ import {
 
 export interface AdapterCoverageInput {
   vpic: { error: string | null; hasCoreIdentity: boolean };
-  recalls: { error: string | null; skipped: boolean };
+  recalls: {
+    error: string | null;
+    skipped: boolean;
+    state?: SourceCoverageState;
+    detail?: string | null;
+  };
   publicSearch: { leadCount: number };
-  /** User-confirmed web/auction findings (addon or UI). */
+  /** User-attested web/auction observations (addon or UI). */
   userFindings: { count: number };
-  nicb: { provided: boolean; recordCount: number };
-  paidReport: { provided: boolean };
+  nicb: { provided: boolean; recordCount: number; error?: string | null };
+  paidReport: { provided: boolean; recordCount?: number; error?: string | null };
+  vinRecall?: { status: string };
+  governmentContext?: {
+    complaintsState: SourceCoverageState;
+    complaintsDetail: string;
+    complaintsError: string | null;
+    investigationsState: SourceCoverageState;
+    manufacturerCommunicationsState: SourceCoverageState;
+  };
 }
 
 export function buildEvidenceCoverage(input: AdapterCoverageInput): EvidenceCoverage {
@@ -47,7 +60,10 @@ export function buildEvidenceCoverage(input: AdapterCoverageInput): EvidenceCove
   // --- NHTSA recalls (required automatic when identity allows; FAILED if error) ---
   let recallsState: SourceCoverageState;
   let recallsDetail: string | null;
-  if (input.recalls.skipped) {
+  if (input.recalls.state) {
+    recallsState = input.recalls.state;
+    recallsDetail = input.recalls.detail ?? input.recalls.error;
+  } else if (input.recalls.skipped) {
     // Could not run because identity incomplete — treat as NOT_RUN (not a silent success).
     recallsState = "NOT_RUN";
     recallsDetail = "Skipped — insufficient make/model/year to query recalls.";
@@ -67,6 +83,25 @@ export function buildEvidenceCoverage(input: AdapterCoverageInput): EvidenceCove
     error: input.recalls.error,
   });
 
+  // --- VIN-specific recall page (manual observation; never scraped) ---
+  const vinRecallStatus = input.vinRecall?.status ?? "NOT_CHECKED";
+  sources.push({
+    sourceId: "nhtsa_vin_recall",
+    label: "NHTSA VIN-specific recall check",
+    state:
+      vinRecallStatus === "NOT_CHECKED"
+        ? "NOT_PROVIDED"
+        : vinRecallStatus === "RESULT_UNAVAILABLE"
+          ? "PARTIAL"
+          : "SUCCESS",
+    required: false,
+    detail:
+      vinRecallStatus === "NOT_CHECKED"
+        ? "Not checked — open the official NHTSA VIN lookup and record the observed result."
+        : `Investigator-recorded result: ${vinRecallStatus}. VIN Recon did not scrape the page.`,
+    error: null,
+  });
+
   // --- Public web: leads only (never SEARCH_COMPLETED) ---
   sources.push({
     sourceId: "public_search",
@@ -77,16 +112,16 @@ export function buildEvidenceCoverage(input: AdapterCoverageInput): EvidenceCove
     error: null,
   });
 
-  // --- User-confirmed findings (optional; from UI or browser addon) ---
+  // --- User-recorded source observations (optional; from UI or browser addon) ---
   sources.push({
     sourceId: "user_findings",
-    label: "User-confirmed findings",
+    label: "User-recorded source observations",
     state: input.userFindings.count > 0 ? "SUCCESS" : "NOT_PROVIDED",
     required: false,
     detail:
       input.userFindings.count > 0
-        ? `${input.userFindings.count} finding(s) saved by the user (FACT records).`
-        : "Not provided — open the search pack / addon and save findings you personally verified.",
+        ? `${input.userFindings.count} source observation(s) saved by the user (OBSERVATION records).`
+        : "Not provided — open the search pack / addon and record what you observed in the source.",
     error: null,
   });
 
@@ -94,24 +129,61 @@ export function buildEvidenceCoverage(input: AdapterCoverageInput): EvidenceCove
   sources.push({
     sourceId: "nicb",
     label: "NICB VINCheck",
-    state: input.nicb.provided ? (input.nicb.recordCount > 0 ? "SUCCESS" : "PARTIAL") : "NOT_PROVIDED",
+    state: input.nicb.provided
+      ? input.nicb.error || input.nicb.recordCount === 0
+        ? "PARTIAL"
+        : "SUCCESS"
+      : "NOT_PROVIDED",
     required: false,
     detail: input.nicb.provided
-      ? `User-supplied paste parsed into ${input.nicb.recordCount} record(s).`
+      ? input.nicb.error ?? `User-supplied paste parsed into ${input.nicb.recordCount} record(s).`
       : "Not provided — paste a manually-run VINCheck result to include.",
-    error: null,
+    error: input.nicb.error ?? null,
   });
+
+  if (input.governmentContext) {
+    sources.push({
+      sourceId: "nhtsa_complaints",
+      label: "NHTSA model-level complaints",
+      state: input.governmentContext.complaintsState,
+      required: false,
+      detail: input.governmentContext.complaintsDetail,
+      error: input.governmentContext.complaintsError,
+    });
+    sources.push({
+      sourceId: "nhtsa_investigations",
+      label: "NHTSA model-level investigations",
+      state: input.governmentContext.investigationsState,
+      required: false,
+      detail: "Official model-level context link generated; no investigation page was scraped.",
+      error: null,
+    });
+    sources.push({
+      sourceId: "nhtsa_manufacturer_communications",
+      label: "NHTSA manufacturer communications / TSBs",
+      state: input.governmentContext.manufacturerCommunicationsState,
+      required: false,
+      detail: "Official model-level context link generated; no communication document was scraped.",
+      error: null,
+    });
+  }
 
   // --- Paid reports (optional, never scraped) ---
   sources.push({
     sourceId: "paid_report",
     label: "NMVTIS / CARFAX / AutoCheck",
-    state: input.paidReport.provided ? "SUCCESS" : "NOT_PROVIDED",
+    state: input.paidReport.provided
+      ? input.paidReport.error
+        ? "PARTIAL"
+        : (input.paidReport.recordCount ?? 0) > 0
+          ? "SUCCESS"
+          : "PARTIAL"
+      : "NOT_PROVIDED",
     required: false,
     detail: input.paidReport.provided
-      ? "User-supplied paid report import present."
+      ? `User-supplied paid report transcribed into ${input.paidReport.recordCount ?? 0} observation record(s).`
       : "Not provided — paid reports are never scraped; import is optional.",
-    error: null,
+    error: input.paidReport.error ?? null,
   });
 
   const required = sources.filter((s) => s.required);

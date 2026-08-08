@@ -27,13 +27,13 @@ console.log("1) search pack structure");
   assert(pack.privacyItems.length >= 3, "privacy items present");
   assert(pack.googleItems.every((i) => i.privacyWarning), "google marked privacyWarning");
   assert(pack.auctionItems.some((i) => i.id === "bidfax"), "bidfax present");
-  assert(pack.allItems.length === pack.privacyItems.length + pack.googleItems.length + pack.auctionItems.length + pack.governmentItems.length + pack.marketItems.length, "allItems sum");
+  assert(pack.allItems.length === pack.privacyItems.length + pack.googleItems.length + pack.auctionItems.length + pack.governmentItems.length + pack.marketItems.length + pack.regionalItems.length, "allItems sum");
   assert(defaultOpenPackIds().every((id) => pack.allItems.some((i) => i.id === id)), "default open ids exist");
   assert(!defaultOpenPackIds().some((id) => id.startsWith("google")), "default pack excludes google");
   assert(buildEngineSearchUrl("startpage", vin).includes("startpage.com"), "startpage url");
 }
 
-console.log("2) user findings → FACT records");
+console.log("2) user findings → OBSERVATION records");
 {
   const findings = parseUserFindings(vin, [
     {
@@ -49,8 +49,9 @@ console.log("2) user findings → FACT records");
   ]);
   assert(findings.length === 1, "one finding");
   const records = findingsToRecords(findings);
-  assert(records[0].evidence_type === "FACT", "FACT category");
-  assert(records[0].event_type === "user_confirmed_finding", "event type");
+  assert(records[0].evidence_type === "OBSERVATION", "OBSERVATION category");
+  assert(records[0].event_type === "user_observed_source", "event type");
+  assert(records[0].provenance.independentlyRetrieved === false, "manual provenance");
   assert(records[0].damage === "front-left", "damage");
   assert(records[0].title_status === "salvage", "title");
   assert(/salvage/i.test(records[0].title_status || ""), "salvage detectable by risk engine");

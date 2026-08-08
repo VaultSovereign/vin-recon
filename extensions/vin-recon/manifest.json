@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "VIN Recon",
-  "version": "0.1.3",
-  "description": "Detect VINs, open a privacy-first search pack, and save findings into VIN Recon. Never scrapes CAPTCHA/paywall sites.",
+  "version": "0.2.0",
+  "description": "Detect VINs, open a privacy-first search pack, and save source observations into VIN Recon. Never scrapes CAPTCHA/paywall sites.",
   "permissions": ["storage", "activeTab", "scripting", "tabs"],
   "host_permissions": [
     "http://localhost/*",
