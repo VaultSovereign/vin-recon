@@ -1,0 +1,45 @@
+* { box-sizing: border-box; }
+body {
+  width: 360px;
+  margin: 0;
+  padding: 12px;
+  font: 13px/1.4 system-ui, -apple-system, Segoe UI, sans-serif;
+  color: #1a1a1a;
+  background: #fafafa;
+}
+header h1 { margin: 0; font-size: 16px; }
+.sub, .hint, footer { color: #666; font-size: 11px; }
+section { margin: 12px 0; }
+label { display: block; margin: 6px 0; font-size: 12px; }
+input, select, textarea {
+  width: 100%;
+  margin-top: 2px;
+  padding: 6px 8px;
+  font: inherit;
+}
+.actions { display: flex; flex-direction: column; gap: 6px; }
+button {
+  padding: 8px 10px;
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  background: #fff;
+}
+button.primary { background: #1e648f; color: #fff; border-color: #1e648f; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+#findingsList { padding-left: 16px; margin: 8px 0 0; }
+#findingsList li { margin-bottom: 6px; }
+.out {
+  max-height: 160px;
+  overflow: auto;
+  background: #111;
+  color: #cfc;
+  padding: 8px;
+  font-size: 10px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+footer { margin-top: 8px; border-top: 1px solid #ddd; padding-top: 8px; }
+a { color: #1e648f; }

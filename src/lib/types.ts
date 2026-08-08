@@ -1,4 +1,5 @@
 // Core normalized evidence model and shared types for VIN Recon.
+import type { SearchPack } from "./engine/searchPack";
 //
 // EVIDENCE CATEGORIES (must stay visually/structurally distinct in the UI):
 //   FACT         - directly retrieved from a source (e.g. NHTSA decode, a listing page)
@@ -161,10 +162,49 @@ export interface NicbParsedResult {
   parsedAt: string;
 }
 
+/**
+ * Human-confirmed research finding (from web UI or browser addon).
+ * Becomes a FACT NormalizedRecord — only after the user saves it.
+ */
+export interface UserFindingInput {
+  id?: string;
+  sourceLabel?: string;
+  sourceUrl?: string | null;
+  note?: string;
+  eventDate?: string | null;
+  mileage?: number | string | null;
+  mileageUnit?: MileageUnit | null;
+  location?: string | null;
+  titleStatus?: string | null;
+  damage?: string | null;
+  confidence?: Confidence;
+  savedAt?: string;
+  pageTitle?: string | null;
+}
+
+export interface UserFinding {
+  id: string;
+  vin: string;
+  sourceLabel: string;
+  sourceUrl: string | null;
+  note: string;
+  eventDate: string | null;
+  mileage: number | null;
+  mileageUnit: MileageUnit | null;
+  location: string | null;
+  titleStatus: string | null;
+  damage: string | null;
+  confidence: Confidence;
+  savedAt: string;
+  pageTitle: string | null;
+}
+
 export interface ReconstructRequest {
   vin: string;
   nicbRawText?: string;
   sellerClaims?: string[];
+  /** User-confirmed findings from manual research / browser addon. */
+  findings?: UserFindingInput[];
 }
 
 export interface ReconstructResponse {
@@ -182,4 +222,8 @@ export interface ReconstructResponse {
   purchaseQuestions: string[];
   sourcesQueried: string[];
   parserVersion: string;
+  /** Echo of normalized user findings included in this reconstruction. */
+  findings: UserFinding[];
+  /** Privacy-first search pack (human-openable URLs; nothing scraped). */
+  searchPack: SearchPack;
 }

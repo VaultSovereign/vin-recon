@@ -70,8 +70,26 @@ Hard rules:
 5. Identity has an explicit `identityStatus` (`ESTABLISHED | PARTIAL | UNRESOLVED | CHECK_DIGIT_MISMATCH`) and check-digit **candidates** when the SAE J853 digit fails.
 
 ```bash
-npm test   # coverage / GREEN-gating regression tests
+npm test   # coverage / GREEN-gating / search-pack regression tests
 ```
+
+## Browser addon + search pack (v0.1.3)
+
+Companion MV3 extension under `extensions/vin-recon/`:
+
+- Detects VINs on listing pages
+- Opens a **privacy-first search pack** (Startpage / Brave / DuckDuckGo first; Google opt-in)
+- Auction verticals: Bidfax, Copart, IAAI + NICB (manual CAPTCHA)
+- **Save findings** → stored locally → sent as FACT records on reconstruct
+
+```bash
+npm run dev
+# Chrome → chrome://extensions → Load unpacked → extensions/vin-recon
+```
+
+See `extensions/vin-recon/README.md`. Web UI also has **Save finding** and **Open privacy search pack**.
+
+Deep-link: `http://localhost:3000/?vin=YOURVINHERE`
 
 ## NMVTIS / CARFAX / AutoCheck
 

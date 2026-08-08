@@ -5,6 +5,8 @@
 // 2. riskLevel and evidenceCoverage stay separate fields.
 // 3. GREEN risk only when coverage.greenEligible && no RED findings.
 // 4. Identity status is explicit (ESTABLISHED | PARTIAL | UNRESOLVED | CHECK_DIGIT_MISMATCH).
+//
+// v0.1.3: privacy-first search pack + user-confirmed findings (addon / UI).
 import { NormalizedRecord, ReconstructRequest, ReconstructResponse } from "../types";
 import { isWellFormedVin } from "../vinCheckDigit";
 import { decodeVinWithVpic } from "../adapters/nhtsaVpic";
@@ -17,8 +19,10 @@ import { checkSellerClaims } from "./sellerClaims";
 import { generatePurchaseQuestions } from "./purchaseQuestions";
 import { buildEvidenceCoverage } from "./evidenceCoverage";
 import { applyIdentityStatus } from "./identityStatus";
+import { buildSearchPack } from "./searchPack";
+import { findingsToRecords, parseUserFindings, validateFindingsForVin } from "./userFindings";
 
-export const PARSER_VERSION = "vin-recon/0.1.2";
+export const PARSER_VERSION = "vin-recon/0.1.3";
 
 export async function reconstruct(request: ReconstructRequest): Promise<ReconstructResponse> {
   const vin = request.vin.trim().toUpperCase();
@@ -29,6 +33,9 @@ export async function reconstruct(request: ReconstructRequest): Promise<Reconstr
   if (!isWellFormedVin(vin)) {
     throw new Error("VIN must be 17 characters using only valid VIN alphanumerics (no I, O, Q).");
   }
+
+  const findings = parseUserFindings(vin, request.findings ?? []);
+  validateFindingsForVin(vin, findings);
 
   // 1. NHTSA vPIC decode.
   const vpic = await decodeVinWithVpic(vin);
@@ -47,7 +54,8 @@ export async function reconstruct(request: ReconstructRequest): Promise<Reconstr
   records.push(recallsOutcome.record);
   const recallsSkipped = recallsOutcome.record.event_type === "recalls_skipped";
 
-  // 3. Public search discovery (generates leads only, does not scrape).
+  // 3. Privacy-first search pack (leads only — SEARCH_LEADS_GENERATED).
+  const searchPack = buildSearchPack(vin);
   const searchLeads = buildVinSearchLeads(vin);
   records.push(buildSearchDiscoveryRecord(vin, searchLeads));
 
@@ -62,7 +70,13 @@ export async function reconstruct(request: ReconstructRequest): Promise<Reconstr
     sourcesQueried.push("https://www.nicb.org/vincheck (user-supplied paste)");
   }
 
-  // 5. Coverage matrix (before risk — GREEN is gated on it).
+  // 5. User-confirmed findings (addon / UI) → FACT records.
+  if (findings.length > 0) {
+    records.push(...findingsToRecords(findings));
+    sourcesQueried.push("user-confirmed findings (manual / browser addon)");
+  }
+
+  // 6. Coverage matrix (before risk — GREEN is gated on it).
   const evidenceCoverage = buildEvidenceCoverage({
     vpic: {
       error: vpic.error,
@@ -72,12 +86,13 @@ export async function reconstruct(request: ReconstructRequest): Promise<Reconstr
       error: recallsOutcome.error,
       skipped: recallsSkipped,
     },
-    publicSearch: { leadCount: searchLeads.length },
+    publicSearch: { leadCount: searchPack.allItems.length },
+    userFindings: { count: findings.length },
     nicb: { provided: nicbProvided, recordCount: nicbRecordCount },
     paidReport: { provided: false },
   });
 
-  // 6. Timeline, risk flags, seller claims, purchase questions.
+  // 7. Timeline, risk flags, seller claims, purchase questions.
   const timeline = buildTimeline(records);
   const riskFlags = computeRiskFlags(records, timeline, evidenceCoverage);
   const riskLevel = worstRiskLevel(riskFlags);
@@ -98,6 +113,8 @@ export async function reconstruct(request: ReconstructRequest): Promise<Reconstr
     purchaseQuestions,
     sourcesQueried,
     parserVersion: PARSER_VERSION,
+    findings,
+    searchPack,
   };
 }
 
