@@ -47,6 +47,7 @@ console.log("1) all required sources SUCCESS + no adverse => GREEN eligible + GR
     vpic: { error: null, hasCoreIdentity: true },
     recalls: { error: null, skipped: false },
     publicSearch: { leadCount: 7 },
+    userFindings: { count: 0 },
     nicb: { provided: false, recordCount: 0 },
     paidReport: { provided: false },
   });
@@ -70,6 +71,7 @@ console.log("2) NHTSA vPIC unavailable => AMBER / PARTIAL or INSUFFICIENT, never
     vpic: { error: "network down", hasCoreIdentity: false },
     recalls: { error: null, skipped: true },
     publicSearch: { leadCount: 7 },
+    userFindings: { count: 0 },
     nicb: { provided: false, recordCount: 0 },
     paidReport: { provided: false },
   });
@@ -94,11 +96,13 @@ console.log("3) NICB not provided is explicit in matrix");
     vpic: { error: null, hasCoreIdentity: true },
     recalls: { error: null, skipped: false },
     publicSearch: { leadCount: 7 },
+    userFindings: { count: 0 },
     nicb: { provided: false, recordCount: 0 },
     paidReport: { provided: false },
   });
   assert(coverage.sources.find((s) => s.sourceId === "nicb")?.state === "NOT_PROVIDED", "NICB NOT_PROVIDED");
   assert(coverage.sources.find((s) => s.sourceId === "paid_report")?.state === "NOT_PROVIDED", "paid NOT_PROVIDED");
+  assert(coverage.sources.find((s) => s.sourceId === "user_findings")?.state === "NOT_PROVIDED", "findings NOT_PROVIDED");
 }
 
 console.log("4) affirmative salvage evidence => RED regardless of other source failures");
@@ -107,6 +111,7 @@ console.log("4) affirmative salvage evidence => RED regardless of other source f
     vpic: { error: "down", hasCoreIdentity: false },
     recalls: { error: null, skipped: true },
     publicSearch: { leadCount: 0 },
+    userFindings: { count: 1 },
     nicb: { provided: true, recordCount: 1 },
     paidReport: { provided: false },
   });
@@ -129,6 +134,7 @@ console.log("5) zero FACT records must never imply clean history");
     vpic: { error: null, hasCoreIdentity: true },
     recalls: { error: null, skipped: false },
     publicSearch: { leadCount: 7 },
+    userFindings: { count: 0 },
     nicb: { provided: false, recordCount: 0 },
     paidReport: { provided: false },
   });
@@ -193,6 +199,7 @@ console.log("7) partial required success => PARTIAL completeness, no GREEN");
     vpic: { error: null, hasCoreIdentity: true },
     recalls: { error: "HTTP 500", skipped: false },
     publicSearch: { leadCount: 7 },
+    userFindings: { count: 0 },
     nicb: { provided: false, recordCount: 0 },
     paidReport: { provided: false },
   });

@@ -13,6 +13,8 @@ export interface AdapterCoverageInput {
   vpic: { error: string | null; hasCoreIdentity: boolean };
   recalls: { error: string | null; skipped: boolean };
   publicSearch: { leadCount: number };
+  /** User-confirmed web/auction findings (addon or UI). */
+  userFindings: { count: number };
   nicb: { provided: boolean; recordCount: number };
   paidReport: { provided: boolean };
 }
@@ -71,7 +73,20 @@ export function buildEvidenceCoverage(input: AdapterCoverageInput): EvidenceCove
     label: "Public web / auction search",
     state: "SEARCH_LEADS_GENERATED",
     required: false,
-    detail: `${input.publicSearch.leadCount} search lead(s) generated. No pages were fetched or scraped.`,
+    detail: `${input.publicSearch.leadCount} search-pack lead(s) generated. No pages were fetched or scraped.`,
+    error: null,
+  });
+
+  // --- User-confirmed findings (optional; from UI or browser addon) ---
+  sources.push({
+    sourceId: "user_findings",
+    label: "User-confirmed findings",
+    state: input.userFindings.count > 0 ? "SUCCESS" : "NOT_PROVIDED",
+    required: false,
+    detail:
+      input.userFindings.count > 0
+        ? `${input.userFindings.count} finding(s) saved by the user (FACT records).`
+        : "Not provided — open the search pack / addon and save findings you personally verified.",
     error: null,
   });
 

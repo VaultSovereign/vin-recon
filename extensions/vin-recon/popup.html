@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>VIN Recon</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <h1>VIN Recon</h1>
+    <p class="sub">Privacy-first search pack · save findings · no scraping</p>
+  </header>
+
+  <section>
+    <label>VIN
+      <select id="vinSelect"></select>
+    </label>
+    <input id="vinManual" maxlength="17" placeholder="Or paste 17-char VIN" />
+  </section>
+
+  <section class="actions">
+    <button id="btnDetect" type="button">Re-scan page</button>
+    <button id="btnPack" type="button" class="primary">Open privacy search pack</button>
+    <button id="btnGoogle" type="button">Open Google pack (opt-in)</button>
+    <button id="btnApp" type="button">Open in VIN Recon app</button>
+  </section>
+
+  <section>
+    <h2>Save finding</h2>
+    <p class="hint">Only save what you personally verified. Findings become FACT records on reconstruct.</p>
+    <label>Source label <input id="fSource" value="Web research" /></label>
+    <label>Source URL <input id="fUrl" placeholder="https://..." /></label>
+    <label>Damage / title <input id="fDamage" placeholder="salvage / front damage" /></label>
+    <label>Mileage <input id="fMileage" placeholder="42881" /></label>
+    <label>Event date <input id="fDate" placeholder="YYYY-MM-DD" /></label>
+    <label>Note <textarea id="fNote" rows="3" placeholder="What you saw..."></textarea></label>
+    <button id="btnSave" type="button" class="primary">Save finding</button>
+    <ul id="findingsList"></ul>
+  </section>
+
+  <section>
+    <h2>Reconstruct via API</h2>
+    <p class="hint">Posts to your local/deployed VIN Recon API with saved findings.</p>
+    <button id="btnRecon" type="button" class="primary">RECONSTRUCT now</button>
+    <pre id="reconOut" class="out"></pre>
+  </section>
+
+  <footer>
+    <a href="options.html" target="_blank">Options</a>
+    · SEARCH_LEADS_GENERATED ≠ SEARCH_COMPLETED
+  </footer>
+
+  <script src="lib/searchPack.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

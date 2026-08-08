@@ -38,6 +38,8 @@ export function buildHtmlReport(report: ReconstructResponse): string {
     purchaseQuestions,
     sourcesQueried,
     parserVersion,
+    findings,
+    searchPack,
   } = report;
 
   const candidatesHtml =
@@ -129,8 +131,29 @@ ${
   </table>`
 }
 
-<h2>3. Public history signals</h2>
-<p><strong>SEARCH_LEADS_GENERATED</strong> (not SEARCH_COMPLETED). Links were generated for human review; no pages were scraped.</p>
+<h2>3. Public history signals — search pack</h2>
+<p><strong>SEARCH_LEADS_GENERATED</strong> (not SEARCH_COMPLETED). ${esc(searchPack.allItems.length)} lead(s). Privacy engines first; Google opt-in. No pages scraped.</p>
+<ul>
+${searchPack.allItems.map((i) => `<li><a href="${esc(i.url)}">${esc(i.label)}</a></li>`).join("\n")}
+</ul>
+
+<h2>3b. Saved findings (${findings.length})</h2>
+${
+  findings.length === 0
+    ? "<p>No user-confirmed findings.</p>"
+    : `<table><tr><th>Source</th><th>Date</th><th>Mileage</th><th>Title/Damage</th><th>Note</th><th>URL</th></tr>
+  ${findings
+    .map(
+      (f) =>
+        `<tr><td>${esc(f.sourceLabel)}</td><td>${esc(f.eventDate)}</td><td>${
+          f.mileage !== null ? esc(f.mileage) + " " + esc(f.mileageUnit) : ""
+        }</td><td>${esc([f.titleStatus, f.damage].filter(Boolean).join(" / "))}</td><td>${esc(
+          f.note
+        )}</td><td>${f.sourceUrl ? `<a href="${esc(f.sourceUrl)}">link</a>` : ""}</td></tr>`
+    )
+    .join("\n")}
+  </table>`
+}
 
 <h2>4. Timeline</h2>
 ${

@@ -1,9 +1,9 @@
 "use client";
 
 import { ReconstructResponse, RiskFlagLevel, SourceCoverageState } from "@/lib/types";
-import { buildVinSearchLeads } from "@/lib/adapters/searchDiscovery";
 import { buildHtmlReport } from "@/lib/engine/htmlExport";
 import { formatCoverageMatrix } from "@/lib/engine/evidenceCoverage";
+import { defaultOpenPackIds, SearchPackItem } from "@/lib/engine/searchPack";
 
 function downloadFile(filename: string, content: string, mime: string) {
   const blob = new Blob([content], { type: mime });
@@ -42,9 +42,39 @@ function riskClass(level: RiskFlagLevel): string {
   return `badge badge-${level}`;
 }
 
+function openSearchPackTabs(items: SearchPackItem[], ids: string[]) {
+  const idSet = new Set(ids);
+  const toOpen = items.filter((i) => idSet.has(i.id));
+  for (const item of toOpen) {
+    window.open(item.url, "_blank", "noopener,noreferrer");
+  }
+}
+
+function PackGroup({ title, items, warn }: { title: string; items: SearchPackItem[]; warn?: boolean }) {
+  if (items.length === 0) return null;
+  return (
+    <div style={{ marginBottom: "1rem" }}>
+      <h4>
+        {title}
+        {warn ? " (opt-in — privacy warning)" : ""}
+      </h4>
+      <ul className="linkList">
+        {items.map((item) => (
+          <li key={item.id}>
+            <a href={item.url} target="_blank" rel="noopener noreferrer">
+              {item.label}
+            </a>
+            {item.description ? <span className="meta"> — {item.description}</span> : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default function ReportView({ report }: { report: ReconstructResponse }) {
-  const leads = buildVinSearchLeads(report.vin);
-  const { evidenceCoverage, identity } = report;
+  const { evidenceCoverage, identity, searchPack, findings } = report;
+  const damageFindings = findings.filter((f) => f.damage || /auction|salvage|copart|iaai|bidfax/i.test(f.sourceLabel + (f.note || "")));
 
   return (
     <div>
@@ -232,21 +262,78 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
       </section>
 
       <section>
-        <h2>3. Public History Signals</h2>
+        <h2>3. Public History Signals — search pack</h2>
         <p>
-          <strong>Status: SEARCH_LEADS_GENERATED</strong> — not SEARCH_COMPLETED. These links are not
-          automatically scraped (to respect CAPTCHAs, robots.txt, and access controls). Open each one and
-          manually record any findings. Until you do, public web history is <em>not</em> established.
+          <strong>Status: SEARCH_LEADS_GENERATED</strong> — not SEARCH_COMPLETED. Nothing is scraped.
+          Privacy engines (Startpage / Brave / DDG) are preferred; Google is opt-in. Open links, verify
+          yourself, then <strong>save findings</strong> so they become FACT records.
         </p>
-        <ul className="linkList">
-          {leads.map((lead) => (
-            <li key={lead.url}>
-              <a href={lead.url} target="_blank" rel="noopener noreferrer">
-                {lead.label}
-              </a>
-            </li>
-          ))}
-        </ul>
+        <div className="exportButtons">
+          <button
+            type="button"
+            onClick={() => openSearchPackTabs(searchPack.allItems, defaultOpenPackIds())}
+          >
+            Open privacy search pack (tabs)
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              openSearchPackTabs(
+                searchPack.allItems,
+                searchPack.googleItems.map((g) => g.id)
+              )
+            }
+          >
+            Open Google pack (opt-in)
+          </button>
+        </div>
+        <PackGroup title="Privacy web" items={searchPack.privacyItems} />
+        <PackGroup title="Auction / salvage" items={searchPack.auctionItems} />
+        <PackGroup title="Government / manual" items={searchPack.governmentItems} />
+        <PackGroup title="Market / classifieds queries" items={searchPack.marketItems} />
+        <PackGroup title="Google" items={searchPack.googleItems} warn />
+      </section>
+
+      <section>
+        <h2>3b. Saved findings ({findings.length})</h2>
+        {findings.length === 0 ? (
+          <p className="meta">No user-confirmed findings yet. Use the form above or the browser addon.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>Date</th>
+                <th>Mileage</th>
+                <th>Title / damage</th>
+                <th>Note</th>
+                <th>URL</th>
+              </tr>
+            </thead>
+            <tbody>
+              {findings.map((f) => (
+                <tr key={f.id}>
+                  <td>{f.sourceLabel}</td>
+                  <td>{f.eventDate ?? "—"}</td>
+                  <td>{f.mileage !== null ? `${f.mileage} ${f.mileageUnit ?? ""}` : "—"}</td>
+                  <td>
+                    {[f.titleStatus, f.damage].filter(Boolean).join(" / ") || "—"}
+                  </td>
+                  <td>{f.note || "—"}</td>
+                  <td>
+                    {f.sourceUrl ? (
+                      <a href={f.sourceUrl} target="_blank" rel="noopener noreferrer">
+                        link
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </section>
 
       <section>
@@ -293,10 +380,41 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
 
       <section>
         <h2>5. Damage / Auction Evidence</h2>
-        <p>
-          No structured auction/damage evidence has been automatically ingested. Use the public history
-          leads above or import a NICB VINCheck result to add evidence here.
-        </p>
+        {damageFindings.length === 0 ? (
+          <p>
+            No user-confirmed auction/damage findings yet. Open Bidfax / Copart / IAAI from the search pack,
+            then save a finding with damage/title notes.
+          </p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>Damage / title</th>
+                <th>Note</th>
+                <th>URL</th>
+              </tr>
+            </thead>
+            <tbody>
+              {damageFindings.map((f) => (
+                <tr key={f.id}>
+                  <td>{f.sourceLabel}</td>
+                  <td>{[f.damage, f.titleStatus].filter(Boolean).join(" · ") || "—"}</td>
+                  <td>{f.note || "—"}</td>
+                  <td>
+                    {f.sourceUrl ? (
+                      <a href={f.sourceUrl} target="_blank" rel="noopener noreferrer">
+                        link
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </section>
 
       <section>
