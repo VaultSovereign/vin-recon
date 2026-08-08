@@ -1,12 +1,13 @@
 {
   "name": "vin-recon",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "npx --yes tsx src/lib/engine/coverageRules.test.ts"
   },
   "dependencies": {
     "next": "16.3.0",

@@ -54,6 +54,25 @@ Every record is tagged `FACT`, `INFERENCE`, `SELLER_CLAIM`, or `UNKNOWN`. `GREEN
 flags never mean "verified clean" — only "no adverse evidence found in the sources
 checked".
 
+## Evidence coverage vs risk (v0.1.2)
+
+Coverage and risk are separate:
+
+- **`evidenceCoverage`** — per-source state (`SUCCESS | FAILED | NOT_RUN | NOT_PROVIDED | PARTIAL | SEARCH_LEADS_GENERATED`) and top-level completeness (`COMPLETE | PARTIAL | INSUFFICIENT`).
+- **`riskLevel` / `riskFlags`** — adverse findings only.
+
+Hard rules:
+
+1. GREEN is only possible when **all required automatic sources** (NHTSA vPIC + NHTSA recalls) are `SUCCESS` **and** no RED adverse evidence was found.
+2. If any required source is `FAILED` / `NOT_RUN` / `PARTIAL`, the report is incomplete and includes AMBER: *"Search incomplete — no conclusion about adverse history."*
+3. Public web adapter is always `SEARCH_LEADS_GENERATED` (not automatic search completion).
+4. NICB / paid reports show `NOT_PROVIDED` until the user pastes them.
+5. Identity has an explicit `identityStatus` (`ESTABLISHED | PARTIAL | UNRESOLVED | CHECK_DIGIT_MISMATCH`) and check-digit **candidates** when the SAE J853 digit fails.
+
+```bash
+npm test   # coverage / GREEN-gating regression tests
+```
+
 ## NMVTIS / CARFAX / AutoCheck
 
 These are optional, paid, external sources. This app does not scrape them; support for

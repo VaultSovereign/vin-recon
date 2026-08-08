@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "Buyer due-diligence VIN history reconstruction from public sources.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>{children}</body>
