@@ -14,6 +14,7 @@ car, what does that evidence actually establish, and what remains unknown?*
 ## Stack
 
 - Next.js (App Router) + TypeScript
+- Cloudflare Workers via the OpenNext adapter
 - No accounts, no background workers, no vendor analytics, no paid APIs required
 
 ## Running locally
@@ -23,7 +24,19 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000, enter a 17-character VIN, and click **RECONSTRUCT**.
+Open http://localhost:3000, enter a 17-character VIN, and click **Build report**.
+
+## Cloudflare deployment
+
+The Worker is configured for the `vin-recon.com` custom domain in `wrangler.jsonc`.
+
+```bash
+npm run preview  # build and run in the local Workers runtime
+npm run deploy   # build and deploy the Worker + custom domain
+```
+
+The Cloudflare zone must already be active and the deployment credential must have
+Workers and DNS access for the zone.
 
 ## How it works
 

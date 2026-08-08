@@ -53,7 +53,7 @@ function openSearchPackTabs(items: SearchPackItem[], ids: string[]) {
 function PackGroup({ title, items, warn }: { title: string; items: SearchPackItem[]; warn?: boolean }) {
   if (items.length === 0) return null;
   return (
-    <div style={{ marginBottom: "1rem" }}>
+    <div className="packGroup">
       <h4>
         {title}
         {warn ? " (opt-in — privacy warning)" : ""}
@@ -75,85 +75,113 @@ function PackGroup({ title, items, warn }: { title: string; items: SearchPackIte
 export default function ReportView({ report }: { report: ReconstructResponse }) {
   const { evidenceCoverage, identity, searchPack, findings } = report;
   const damageFindings = findings.filter((f) => f.damage || /auction|salvage|copart|iaai|bidfax/i.test(f.sourceLabel + (f.note || "")));
+  const vehicleName = [identity.modelYear, identity.make, identity.model].filter(Boolean).join(" ") || "Vehicle report";
+  const coverageSummary = evidenceCoverage.greenEligible
+    ? "All required automated sources completed. Optional sources may still be missing."
+    : "One or more required automated sources did not complete. Review the source details below.";
+  const identitySummary =
+    identity.identityStatus === "ESTABLISHED"
+      ? "Core make, model, and model-year fields were established."
+      : "Identity needs attention. Review the detailed VIN and check-digit result below.";
 
   return (
-    <div>
-      <div className="exportButtons">
-        <button onClick={() => downloadFile(`vin-recon-${report.vin}.json`, JSON.stringify(report, null, 2), "application/json")}>
-          Export JSON
-        </button>
-        <button onClick={() => downloadFile(`vin-recon-${report.vin}.html`, buildHtmlReport(report), "text/html")}>
-          Export HTML
-        </button>
-      </div>
+    <div className="report">
+      <header className="reportHeader">
+        <div>
+          <p className="eyebrow">Report for <span className="mono">{report.vin}</span></p>
+          <h2>{vehicleName}</h2>
+          <p className="meta">
+            Built <time dateTime={report.queryTimeUtc}>{new Date(report.queryTimeUtc).toLocaleString()}</time>
+            {" · "}{report.parserVersion}
+          </p>
+        </div>
+        <div className="exportButtons" aria-label="Export report">
+          <button
+            className="secondaryButton"
+            onClick={() => downloadFile(`vin-recon-${report.vin}.json`, JSON.stringify(report, null, 2), "application/json")}
+          >
+            Export JSON
+          </button>
+          <button
+            className="secondaryButton"
+            onClick={() => downloadFile(`vin-recon-${report.vin}.html`, buildHtmlReport(report), "text/html")}
+          >
+            Export HTML
+          </button>
+        </div>
+      </header>
 
-      <section className="statusBanner">
-        <h2>Evidence coverage &amp; risk (separate)</h2>
-        <p className="meta">
-          Coverage describes whether sources actually ran. Risk describes adverse evidence found.
-          GREEN risk is only allowed when required automatic sources succeeded.
-        </p>
-        <table>
-          <tbody>
-            <tr>
-              <th>Completeness</th>
-              <td>
-                <span className={completenessClass(evidenceCoverage.completeness)}>
-                  {evidenceCoverage.completeness}
-                </span>
-              </td>
-            </tr>
-            <tr>
-              <th>Risk level</th>
-              <td>
-                <span className={riskClass(report.riskLevel)}>{report.riskLevel}</span>
-              </td>
-            </tr>
-            <tr>
-              <th>GREEN eligible</th>
-              <td>{evidenceCoverage.greenEligible ? "yes" : "no"}</td>
-            </tr>
-            <tr>
-              <th>Summary</th>
-              <td>{evidenceCoverage.summary}</td>
-            </tr>
-            <tr>
-              <th>Matrix</th>
-              <td className="mono">{formatCoverageMatrix(evidenceCoverage)}</td>
-            </tr>
-          </tbody>
-        </table>
+      <section className="reportSection statusBanner" id="overview">
+        <div className="sectionTitle">
+          <div>
+            <p className="eyebrow">At a glance</p>
+            <h2>Coverage and risk</h2>
+          </div>
+          <p>Coverage says what ran. Risk says what adverse evidence was found.</p>
+        </div>
 
-        <h3>Source coverage matrix</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Source</th>
-              <th>State</th>
-              <th>Required</th>
-              <th>Detail</th>
-            </tr>
-          </thead>
-          <tbody>
-            {evidenceCoverage.sources.map((s) => (
-              <tr key={s.sourceId}>
-                <td>{s.label}</td>
-                <td>
-                  <span className={coverageBadgeClass(s.state)}>{s.state}</span>
-                </td>
-                <td>{s.required ? "yes" : "no"}</td>
-                <td>
-                  {s.detail ?? "—"}
-                  {s.error ? ` (${s.error})` : ""}
-                </td>
+        <div className="statusGrid">
+          <article className="statusCard">
+            <span className="statusLabel">Evidence coverage</span>
+            <span className={completenessClass(evidenceCoverage.completeness)}>
+              {evidenceCoverage.completeness}
+            </span>
+            <p>{coverageSummary}</p>
+          </article>
+          <article className="statusCard">
+            <span className="statusLabel">Risk level</span>
+            <span className={riskClass(report.riskLevel)}>{report.riskLevel}</span>
+            <p>GREEN never means certified clean. It only describes the evidence checked here.</p>
+          </article>
+          <article className="statusCard">
+            <span className="statusLabel">Vehicle identity</span>
+            <span className="badge badge-NEUTRAL">{identity.identityStatus}</span>
+            <p>{identitySummary}</p>
+          </article>
+        </div>
+
+        <details className="coverageDetails" open>
+          <summary>Source coverage details</summary>
+          <p className="mono coverageMatrix">{formatCoverageMatrix(evidenceCoverage)}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>State</th>
+                <th>Required</th>
+                <th>Detail</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {evidenceCoverage.sources.map((source) => (
+                <tr key={source.sourceId}>
+                  <td>{source.label}</td>
+                  <td>
+                    <span className={coverageBadgeClass(source.state)}>{source.state}</span>
+                  </td>
+                  <td>{source.required ? "yes" : "no"}</td>
+                  <td>
+                    {source.detail ?? "—"}
+                    {source.error ? ` (${source.error})` : ""}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
       </section>
 
-      <section>
-        <h2>1. Vehicle Identity</h2>
+      <nav className="reportNav" aria-label="Report sections">
+        <a href="#identity">Vehicle</a>
+        <a href="#recalls">Recalls</a>
+        <a href="#search-pack">Research links</a>
+        <a href="#timeline">Timeline</a>
+        <a href="#risk-flags">Risk flags</a>
+        <a href="#purchase-questions">Questions</a>
+      </nav>
+
+      <section className="reportSection" id="identity">
+        <h2>Vehicle identity</h2>
         <table>
           <tbody>
             <tr>
@@ -232,8 +260,8 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
         </table>
       </section>
 
-      <section>
-        <h2>2. Factory / Technical Data</h2>
+      <section className="reportSection" id="recalls">
+        <h2>Factory data and recalls</h2>
         <h3>Recalls ({report.recalls.length})</h3>
         {report.recalls.length === 0 ? (
           <p>No recalls found for the decoded make/model/year, or recall lookup could not be performed.</p>
@@ -261,8 +289,8 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
         )}
       </section>
 
-      <section>
-        <h2>3. Public History Signals — search pack</h2>
+      <section className="reportSection" id="search-pack">
+        <h2>Public-history research links</h2>
         <p>
           <strong>Status: SEARCH_LEADS_GENERATED</strong> — not SEARCH_COMPLETED. Nothing is scraped.
           Privacy engines (Startpage / Brave / DDG) are preferred; Google is opt-in. Open links, verify
@@ -294,8 +322,8 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
         <PackGroup title="Google" items={searchPack.googleItems} warn />
       </section>
 
-      <section>
-        <h2>3b. Saved findings ({findings.length})</h2>
+      <section className="reportSection" id="saved-findings">
+        <h2>Saved findings ({findings.length})</h2>
         {findings.length === 0 ? (
           <p className="meta">No user-confirmed findings yet. Use the form above or the browser addon.</p>
         ) : (
@@ -336,8 +364,8 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
         )}
       </section>
 
-      <section>
-        <h2>4. Timeline</h2>
+      <section className="reportSection" id="timeline">
+        <h2>Evidence timeline</h2>
         {report.timeline.length === 0 ? (
           <p>No dated evidence retrieved. No dates or mileage have been invented.</p>
         ) : (
@@ -378,8 +406,8 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
         )}
       </section>
 
-      <section>
-        <h2>5. Damage / Auction Evidence</h2>
+      <section className="reportSection" id="damage-evidence">
+        <h2>Damage and auction evidence</h2>
         {damageFindings.length === 0 ? (
           <p>
             No user-confirmed auction/damage findings yet. Open Bidfax / Copart / IAAI from the search pack,
@@ -417,8 +445,8 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
         )}
       </section>
 
-      <section>
-        <h2>6. Risk Flags</h2>
+      <section className="reportSection" id="risk-flags">
+        <h2>Risk flags</h2>
         <p className="meta">
           Top-level risk: <span className={riskClass(report.riskLevel)}>{report.riskLevel}</span>. GREEN never
           means &quot;verified clean.&quot;
@@ -445,8 +473,8 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
         </table>
       </section>
 
-      <section>
-        <h2>7. Seller Claim Check</h2>
+      <section className="reportSection" id="seller-claims">
+        <h2>Seller claim check</h2>
         {report.claimResults.length === 0 ? (
           <p>No seller claims were supplied for verification.</p>
         ) : (
@@ -481,8 +509,8 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
         )}
       </section>
 
-      <section>
-        <h2>8. Purchase Questions</h2>
+      <section className="reportSection" id="purchase-questions">
+        <h2>Questions to ask before purchase</h2>
         <ol>
           {report.purchaseQuestions.map((q, i) => (
             <li key={i}>{q}</li>
@@ -490,8 +518,8 @@ export default function ReportView({ report }: { report: ReconstructResponse }) 
         </ol>
       </section>
 
-      <section>
-        <h2>Raw Evidence Records</h2>
+      <section className="reportSection rawRecords" id="raw-evidence">
+        <h2>Raw evidence records</h2>
         <table>
           <thead>
             <tr>
