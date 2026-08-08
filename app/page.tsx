@@ -14,7 +14,7 @@ function downloadFile(filename: string, content: string, mime: string) {
 }
 
 export default function Home() {
-  const [vin, setVin] = useState("55SWF4JB6FU077077");
+  const [vin, setVin] = useState("");
   const [sellerClaimsText, setSellerClaimsText] = useState("accident free\noriginal mileage");
   const [nicbPaste, setNicbPaste] = useState("");
   const [externalPaidReportPaste, setExternalPaidReportPaste] = useState("");
@@ -74,7 +74,7 @@ export default function Home() {
             onChange={(event) => setVin(event.target.value.toUpperCase())}
             maxLength={17}
             className="rounded border px-3 py-2"
-            placeholder="17-character VIN"
+            placeholder="e.g. 55SWF4JB6FU077077"
             required
           />
         </label>
@@ -157,9 +157,8 @@ export default function Home() {
               <div>
                 <dt className="font-medium">VIN validity/check digit</dt>
                 <dd>
-                  format={String(report.vehicleIdentity.vinValidity.isValidFormat)} | checkDigitValid={String(
-                    report.vehicleIdentity.vinValidity.hasValidCheckDigit,
-                  )}
+                  Format valid: {report.vehicleIdentity.vinValidity.isValidFormat ? "YES" : "NO"} | Check digit valid:{" "}
+                  {report.vehicleIdentity.vinValidity.hasValidCheckDigit ? "YES" : "NO"}
                 </dd>
               </div>
             </dl>

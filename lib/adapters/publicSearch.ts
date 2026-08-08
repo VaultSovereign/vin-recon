@@ -71,12 +71,13 @@ function parseSearchHits(html: string): SearchHit[] {
 
 export async function searchExactVinPublicRecords(vin: string): Promise<NormalizedRecord[]> {
   try {
+    // Public index lookup is intentionally lightweight and replaceable; parser may need updates if provider markup changes.
     const query = encodeURIComponent(`"${vin}"`);
     const response = await fetch(`https://duckduckgo.com/html/?q=${query}`, {
       headers: {
         "User-Agent": "VIN-Recon/1.0 (public-index lookup)",
       },
-      cache: "no-store",
+      next: { revalidate: 300 },
     });
 
     if (!response.ok) {

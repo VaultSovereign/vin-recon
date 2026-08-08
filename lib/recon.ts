@@ -17,6 +17,35 @@ interface ReconInput {
   externalPaidReportPaste: string;
 }
 
+const MILEAGE_INCONSISTENCY_THRESHOLD = 2000;
+
+function escapeHtml(value: string): string {
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+function deriveSafetyCampaigns(recalls: unknown[]): unknown[] {
+  const campaigns: Record<string, unknown>[] = [];
+
+  for (const recall of recalls) {
+    const item = recall as Record<string, unknown>;
+    const manufacturerCampaign = item.ManufacturerCampaignNumber;
+    const nhtsaId = item.NHTSACampaignNumber;
+
+    if (!manufacturerCampaign && !nhtsaId) {
+      continue;
+    }
+
+    campaigns.push({
+      manufacturerCampaignNumber: manufacturerCampaign ?? null,
+      nhtsaCampaignNumber: nhtsaId ?? null,
+      component: item.Component ?? null,
+      summary: item.Summary ?? null,
+    });
+  }
+
+  return campaigns;
+}
+
 function pickLocation(text: string): string | null {
   const stateMatch = text.match(/\b([A-Z][a-z]+,\s?[A-Z]{2}|[A-Z]{2})\b/);
   return stateMatch?.[1] ?? null;
@@ -101,7 +130,11 @@ function makeRiskFlags(records: NormalizedRecord[], vinMismatch: boolean): RiskF
     }
   };
 
-  redIf("salvage/title indicator", /(salvage|rebuilt|title)/i, "Public evidence references title risk terms.");
+  redIf(
+    "salvage/title indicator",
+    /(salvage title|rebuilt title|flood title|junk title|parts only|certificate of destruction)/i,
+    "Public evidence references adverse title risk terms.",
+  );
   redIf("flood indicator", /flood/i, "Public evidence references flood terms.");
   redIf("theft indicator", /theft|stolen/i, "Public evidence references theft terms.");
   redIf("airbag deployment mentioned", /airbag/i, "Public evidence references airbag deployment.");
@@ -121,7 +154,10 @@ function makeRiskFlags(records: NormalizedRecord[], vinMismatch: boolean): RiskF
     .map((record) => record.mileage)
     .filter((mileage): mileage is number => mileage !== null)
     .sort((a, b) => a - b);
-  if (mileageValues.length >= 2 && mileageValues[0] + 2000 < mileageValues[mileageValues.length - 1]) {
+  if (
+    mileageValues.length >= 2 &&
+    mileageValues[0] + MILEAGE_INCONSISTENCY_THRESHOLD < mileageValues[mileageValues.length - 1]
+  ) {
     flags.push({
       flag: "mileage inconsistency",
       level: "AMBER",
@@ -163,7 +199,9 @@ function makeRiskFlags(records: NormalizedRecord[], vinMismatch: boolean): RiskF
 function evaluateClaims(claims: string[], records: NormalizedRecord[]): ClaimAssessment[] {
   if (!claims.length) return [];
 
-  const evidenceText = records.map((record) => `${record.raw_excerpt} ${record.title_status} ${record.damage}`).join("\n");
+  const evidenceText = records
+    .map((record) => `${record.raw_excerpt} ${record.title_status ?? ""} ${record.damage ?? ""}`)
+    .join("\n");
 
   return claims.map((claim) => {
     const lower = claim.toLowerCase();
@@ -251,10 +289,26 @@ function generateQuestions(riskFlags: RiskFlag[], claims: ClaimAssessment[]): st
 }
 
 export function renderPortableHtml(report: ReconReport): string {
-  const safeJson = JSON.stringify(report, null, 2)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
+  const safeJson = escapeHtml(JSON.stringify(report, null, 2));
+
+  const riskItems = report.riskFlags
+    .map(
+      (flag) =>
+        `<li><strong>${escapeHtml(flag.level)}</strong> — ${escapeHtml(flag.flag)}: ${escapeHtml(flag.rationale)}</li>`,
+    )
+    .join("");
+
+  const timelineRows = report.timeline
+    .map((event) => {
+      const safeUrl = escapeHtml(event.evidenceUrl);
+
+      return `<tr><td>${escapeHtml(event.date ?? "UNKNOWN")}</td><td>${escapeHtml(event.source)}</td><td>${escapeHtml(
+        event.location ?? "UNKNOWN",
+      )}</td><td>${escapeHtml(event.mileage ?? "UNKNOWN")}</td><td>${escapeHtml(
+        event.event,
+      )}</td><td><a href="${safeUrl}">${safeUrl}</a></td><td>${escapeHtml(event.confidence)}</td></tr>`;
+    })
+    .join("");
 
   return `<!doctype html>
 <html lang="en">
@@ -272,19 +326,15 @@ export function renderPortableHtml(report: ReconReport): string {
   </head>
   <body>
     <h1>VIN Recon Report</h1>
-    <p><strong>VIN:</strong> ${report.query.vin}</p>
-    <p><strong>Query Time (UTC):</strong> ${report.query.queryTimeUtc}</p>
+    <p><strong>VIN:</strong> ${escapeHtml(report.query.vin)}</p>
+    <p><strong>Query Time (UTC):</strong> ${escapeHtml(report.query.queryTimeUtc)}</p>
     <h2>Risk Flags</h2>
-    <ul>${report.riskFlags.map((flag) => `<li><strong>${flag.level}</strong> — ${flag.flag}: ${flag.rationale}</li>`).join("")}</ul>
+    <ul>${riskItems}</ul>
     <h2>Timeline</h2>
     <table>
       <thead><tr><th>Date</th><th>Source</th><th>Location</th><th>Mileage</th><th>Event</th><th>Evidence URL</th><th>Confidence</th></tr></thead>
       <tbody>
-        ${report.timeline
-          .map(
-            (event) => `<tr><td>${event.date ?? "UNKNOWN"}</td><td>${event.source}</td><td>${event.location ?? "UNKNOWN"}</td><td>${event.mileage ?? "UNKNOWN"}</td><td>${event.event}</td><td><a href="${event.evidenceUrl}">${event.evidenceUrl}</a></td><td>${event.confidence}</td></tr>`,
-          )
-          .join("")}
+        ${timelineRows}
       </tbody>
     </table>
     <h2>Raw JSON</h2>
@@ -333,6 +383,7 @@ export async function reconstructVin(input: ReconInput): Promise<ReconReport> {
 
   const riskFlags = makeRiskFlags(records, !vehicleIdentity.vinValidity.hasValidCheckDigit);
   const claimChecks = evaluateClaims(input.sellerClaims, records);
+  const safetyCampaigns = deriveSafetyCampaigns(recalls);
 
   const report: ReconReport = {
     query: {
@@ -343,7 +394,7 @@ export async function reconstructVin(input: ReconInput): Promise<ReconReport> {
     technicalData: {
       nhtsaDecode: decode ?? {},
       recalls,
-      safetyCampaigns: recalls,
+      safetyCampaigns,
       manufacturerIdentifiers: {
         wmi: input.vin.slice(0, 3),
         manufacturer: vehicleIdentity.manufacturer,

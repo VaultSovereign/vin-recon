@@ -1,5 +1,5 @@
 import { reconstructVin, renderPortableHtml } from "@/lib/recon";
-import { normalizeVin } from "@/lib/vin";
+import { isVinFormatValid, normalizeVin } from "@/lib/vin";
 
 export async function POST(request: Request) {
   try {
@@ -14,6 +14,13 @@ export async function POST(request: Request) {
     if (!vin || vin.length !== 17) {
       return Response.json(
         { error: "VIN must be exactly 17 characters." },
+        { status: 400 },
+      );
+    }
+
+    if (!isVinFormatValid(vin)) {
+      return Response.json(
+        { error: "VIN contains invalid characters. VINs must use A-H, J-N, P, R-Z, and 0-9." },
         { status: 400 },
       );
     }
