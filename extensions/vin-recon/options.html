@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>VIN Recon — Options</title>
+  <style>
+    body { font: 14px/1.5 system-ui, sans-serif; max-width: 520px; margin: 2rem auto; padding: 0 1rem; }
+    label { display: block; margin: 1rem 0; }
+    input { width: 100%; padding: 0.5rem; font: inherit; }
+    button { padding: 0.5rem 1rem; margin-top: 0.5rem; }
+    .ok { color: #1e8449; }
+  </style>
+</head>
+<body>
+  <h1>VIN Recon options</h1>
+  <p>Point the addon at your running VIN Recon app (local or deployed). The addon only opens search tabs and POSTs source observations — it never scrapes CAPTCHA sites.</p>
+  <label>
+    App base URL
+    <input id="appBaseUrl" placeholder="http://localhost:3000" />
+  </label>
+  <button id="save" type="button">Save</button>
+  <p id="status" class="ok"></p>
+  <script src="options.js"></script>
+</body>
+</html>

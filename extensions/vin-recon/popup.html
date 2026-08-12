@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>VIN Recon</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <h1>VIN Recon</h1>
+    <p class="sub">Privacy-first search pack · save observations · no scraping</p>
+  </header>
+
+  <section>
+    <label>VIN
+      <select id="vinSelect"></select>
+    </label>
+    <input id="vinManual" maxlength="17" placeholder="Or paste 17-char VIN" />
+  </section>
+
+  <section class="actions">
+    <button id="btnDetect" type="button">Re-scan page</button>
+    <button id="btnPack" type="button" class="primary">Open privacy search pack</button>
+    <button id="btnGoogle" type="button">Open Google pack (opt-in)</button>
+    <button id="btnApp" type="button">Open in VIN Recon app</button>
+  </section>
+
+  <section>
+    <h2>Save source observation</h2>
+    <p class="hint">Only save what you personally observed. It remains an OBSERVATION, not an automatic FACT.</p>
+    <label>Source label <input id="fSource" value="Web research" /></label>
+    <label>Source URL <input id="fUrl" placeholder="https://..." /></label>
+    <label>Underlying original source <input id="fOrigin" placeholder="Copart, DMV, seller..." /></label>
+    <label>Relationship
+      <select id="fRelationship">
+        <option value="UNKNOWN">Unknown</option>
+        <option value="ORIGINAL">Original source</option>
+        <option value="SYNDICATED">Mirror / syndicated copy</option>
+      </select>
+    </label>
+    <label>Event type
+      <select id="fEventType">
+        <option value="listing_observation">Listing</option>
+        <option value="auction_observation">Auction</option>
+        <option value="title_observation">Title / brand</option>
+        <option value="odometer_observation">Odometer</option>
+        <option value="damage_observation">Damage</option>
+        <option value="other_observation">Other</option>
+      </select>
+    </label>
+    <label>Title status <input id="fTitle" placeholder="salvage / rebuilt / clean" /></label>
+    <label>Damage <input id="fDamage" placeholder="front-left impact" /></label>
+    <label>Mileage <input id="fMileage" placeholder="42881" /></label>
+    <label>Mileage unit
+      <select id="fMileageUnit"><option value="km">kilometres</option><option value="mi">miles</option></select>
+    </label>
+    <label>Location <input id="fLocation" placeholder="City, country" /></label>
+    <label>Event date <input id="fDate" placeholder="YYYY-MM-DD" /></label>
+    <label>Exact source excerpt <textarea id="fExcerpt" rows="3" placeholder="Exact relevant wording..."></textarea></label>
+    <label>Investigator note <textarea id="fNote" rows="3" placeholder="Your interpretation or follow-up..."></textarea></label>
+    <button id="btnSave" type="button" class="primary">Save observation</button>
+    <ul id="findingsList"></ul>
+  </section>
+
+  <section>
+    <h2>Reconstruct via API</h2>
+    <p class="hint">Posts to your local/deployed VIN Recon API with saved source observations.</p>
+    <button id="btnRecon" type="button" class="primary">RECONSTRUCT now</button>
+    <pre id="reconOut" class="out"></pre>
+  </section>
+
+  <footer>
+    <a href="options.html" target="_blank">Options</a>
+    · SEARCH_LEADS_GENERATED ≠ SEARCH_COMPLETED
+  </footer>
+
+  <script src="lib/searchPack.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
